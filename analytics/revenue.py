@@ -1,56 +1,69 @@
-from analytics.loader import load_data
-#import data
-df = load_data()
+import os
+import sys
 
-#Total Revenue
-def get_total_revenue():
+# 1. Ambil path dari folder root (projekt)
+# os.path.dirname(__file__) menghasilkan path folder 'testing'
+# Menambahkan os.path.dirname di luarnya akan naik 1 tingkat ke folder 'projekt'
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-    return round(
-        df["Revenue"].sum(),
-        2
+# 2. Daftarkan folder root ke dalam sistem pencarian Python
+if ROOT_DIR not in sys.path:
+    sys.path.append(ROOT_DIR)
+
+from sqlalchemy import func, text
+
+from database.models import Orders
+
+
+def get_total_revenue(db):
+
+    revenue = db.query(
+        func.sum(Orders.Total)
+    ).scalar()
+
+    return revenue
+
+
+def get_monthly_revenue(db):
+
+    result = db.execute(
+        text("""
+            SELECT
+                DATE_TRUNC('month', "InvoiceDate") as month,
+                SUM("Total") as revenue
+            FROM orders
+            GROUP BY month
+            ORDER BY month
+        """)
     )
 
-#Revenue Per Month
-def get_monthly_revenue():
-
-    monthly = (
-        df.groupby(
-            df["InvoiceDate"]
-            .dt.to_period("M")
-        )["Revenue"]
-        .sum()
-        .reset_index()
-    )
-
-    return monthly
-
-#Growth Rate
-def get_monthly_growth():
-
-    monthly = get_monthly_revenue()
-
-    monthly["GrowthRate"] = (
-        monthly["Revenue"]
-        .pct_change()
-        * 100
-    )
-
-    return monthly
-
-#Best Month
-def get_best_month():
-
-    monthly = get_monthly_revenue()
-
-    return monthly.loc[
-        monthly["Revenue"].idxmax()
+    return [
+        dict(row._mapping)
+        for row in result
     ]
 
-#Worst Month
-def get_worst_month():
 
-    monthly = get_monthly_revenue()
+def get_growth_rate(db):
 
-    return monthly.loc[
-        monthly["Revenue"].idxmin()
-    ]
+    monthly = get_monthly_revenue(db)
+
+    growth = []
+
+    for i in range(1, len(monthly)):
+
+        prev = monthly[i-1]["revenue"]
+        curr = monthly[i]["revenue"]
+
+        rate = (
+            ((curr - prev) / prev) * 100
+        ) if prev else 0
+
+        growth.append({
+            "month":
+                monthly[i]["month"],
+
+            "growth_rate":
+                round(rate, 2)
+        })
+
+    return growth

@@ -1,58 +1,86 @@
-from loader import load_data
-#Import Dataset
-df = load_data()
+import os
+import sys
 
-#Top Product
+# 1. Ambil path dari folder root (projekt)
+# os.path.dirname(__file__) menghasilkan path folder 'testing'
+# Menambahkan os.path.dirname di luarnya akan naik 1 tingkat ke folder 'projekt'
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# 2. Daftarkan folder root ke dalam sistem pencarian Python
+if ROOT_DIR not in sys.path:
+    sys.path.append(ROOT_DIR)
+
+from sqlalchemy import func,text
+
+from database.models import Orders
+
 def get_top_products(
-    top_n=10
+    db,
+    limit=10
 ):
+    limit = int(limit)
 
-    result = (
-        df.groupby(["StockCode","Description"])
-        ["Revenue"]
-        .sum()
-        .sort_values(
-            ascending=False
-        )
-        .head(top_n)
+    result = db.execute(
+        text(f"""
+        SELECT
+            p."Description",
+            SUM(d."Quantity") as quantity_sold,
+            SUM(
+                d."Quantity"
+                *
+                d."UnitPrice"
+            ) as revenue
+
+        FROM detail_order d
+
+        JOIN product p
+        ON p."StockCode" = d."StockCode"
+
+        GROUP BY p."Description"
+
+        ORDER BY revenue DESC
+
+        LIMIT {limit}
+        """)
     )
 
-    return result
-
-#Worst Product
-def get_worst_products(
-    top_n=10
-):
-
-    result = (
-        df.groupby(["StockCode", "Description"])
-        ["Revenue"]
-        .sum()
-        .sort_values()
-        .head(top_n)
-    )
-
-    return result
-
-#Most Returned Product
-def get_most_returned_products():
-
-    returns = df[
-        df["InvoiceNo"]
-        .astype(str)
-        .str.startswith("C")
+    return [
+        dict(row._mapping)
+        for row in result
     ]
 
-    result = (
-        returns.groupby(
-            ["StockCode", "Description"]
-        )
-        ["Quantity"]
-        .count()
-        .sort_values(
-            ascending=False
-        )
-        .head(10)
+
+def get_worst_products(
+    db,
+    limit=10
+):
+    limit = int(limit)
+
+    result = db.execute(
+        text(f"""
+        SELECT
+            p."Description",
+            SUM(d."Quantity") as quantity_sold,
+            SUM(
+                d."Quantity"
+                *
+                d."UnitPrice"
+            ) as revenue
+
+        FROM detail_order d
+
+        JOIN product p
+        ON p."StockCode" = d."StockCode"
+
+        GROUP BY p."Description"
+
+        ORDER BY revenue ASC
+
+        LIMIT {limit}
+        """)
     )
 
-    return result
+    return [
+        dict(row._mapping)
+        for row in result
+    ]

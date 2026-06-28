@@ -1,24 +1,40 @@
-from loader import load_data
-#Import Dataset
-df = load_data()
+import os
+import sys
 
-#Revenue by Country
-def get_country_revenue():
+# 1. Ambil path dari folder root (projekt)
+# os.path.dirname(__file__) menghasilkan path folder 'testing'
+# Menambahkan os.path.dirname di luarnya akan naik 1 tingkat ke folder 'projekt'
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-    return (
-        df.groupby("Country")
-        ["Revenue"]
-        .sum()
-        .sort_values(
-            ascending=False
-        )
+# 2. Daftarkan folder root ke dalam sistem pencarian Python
+if ROOT_DIR not in sys.path:
+    sys.path.append(ROOT_DIR)
+
+from sqlalchemy import func,text
+
+from database.models import Orders
+
+def get_country_revenue(db):
+
+    result = db.execute(
+        text("""
+        SELECT
+            c."Country",
+            SUM(o."Total") as revenue
+
+        FROM customer c
+
+        JOIN orders o
+        ON c."CustomerID" =
+           o."CustomerID"
+
+        GROUP BY c."Country"
+
+        ORDER BY revenue DESC
+        """)
     )
 
-#Top Country
-def get_top_country():
-
-    country = (
-        get_country_revenue()
-    )
-
-    return country.index[0]
+    return [
+        dict(row._mapping)
+        for row in result
+    ]
