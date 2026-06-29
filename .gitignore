@@ -1,2 +1,6 @@
 .venv
-agents.md
+node_modules/
+models/
+__pycache__/
+*.pyc
+# agents.md 

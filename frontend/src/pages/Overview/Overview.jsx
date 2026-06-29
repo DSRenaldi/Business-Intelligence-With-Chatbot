@@ -1,6 +1,7 @@
 import {
   ArrowRight,
   Bot,
+  X,
   Package,
   ShoppingCart,
   Sparkles,
@@ -21,8 +22,10 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { useState } from "react";
 
 import DashboardLayout from "../../layouts/DashboardLayout";
+import api from "../../services/api";
 
 import useCountryRevenue from "../../hooks/useCountryRevenue";
 import useInsight from "../../hooks/useInsight";
@@ -257,7 +260,65 @@ function OrdersTrend({ data }) {
   );
 }
 
-function InsightPanel({ insight, growth }) {
+function ReportModal({ onClose, report }) {
+  if (!report) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0d1c2e]/55 p-4">
+      <div className="max-h-[86vh] w-full max-w-4xl overflow-hidden rounded-xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-[#c7c4d8] px-6 py-4">
+          <div>
+            <h2 className="text-xl font-bold text-[#0d1c2e]">{report.title}</h2>
+            <p className="text-xs font-medium text-[#464555]">{report.period}</p>
+          </div>
+          <button className="rounded-lg p-2 text-[#464555] hover:bg-[#dce9ff]" onClick={onClose} type="button">
+            <X size={20} />
+          </button>
+        </div>
+        <div className="max-h-[72vh] space-y-6 overflow-y-auto p-6 text-sm text-[#0d1c2e]">
+          <section>
+            <h3 className="mb-3 text-lg font-bold text-[#3525cd]">Executive Summary</h3>
+            <ul className="space-y-2">
+              {report.executive_summary.map((item) => (
+                <li className="rounded-lg bg-[#f8f9ff] p-3" key={item}>{item}</li>
+              ))}
+            </ul>
+          </section>
+
+          <section className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div className="rounded-lg border border-[#c7c4d8] p-4">
+              <h3 className="mb-3 font-bold text-[#3525cd]">KPI Overview</h3>
+              <p>Total revenue: {formatCurrency(report.kpi.total_revenue)}</p>
+              <p>Total orders: {numberFormatter.format(report.kpi.total_orders)}</p>
+              <p>Total customers: {numberFormatter.format(report.kpi.total_customers)}</p>
+              <p>Average order value: {formatCurrency(report.kpi.average_order_value)}</p>
+            </div>
+            <div className="rounded-lg border border-[#c7c4d8] p-4">
+              <h3 className="mb-3 font-bold text-[#3525cd]">Revenue Analysis</h3>
+              <p>Growth: {report.revenue_analysis.latest_complete_growth}%</p>
+              <p>Best month: {report.revenue_analysis.best_month?.month} ({formatCurrency(report.revenue_analysis.best_month?.revenue)})</p>
+              <p>Weakest month: {report.revenue_analysis.weakest_month?.month} ({formatCurrency(report.revenue_analysis.weakest_month?.revenue)})</p>
+              <p className="mt-2 text-xs text-[#464555]">{report.revenue_analysis.note}</p>
+            </div>
+          </section>
+
+          <section>
+            <h3 className="mb-3 text-lg font-bold text-[#3525cd]">Recommended Actions</h3>
+            <ol className="space-y-2">
+              {report.recommendations.map((item, index) => (
+                <li className="rounded-lg border border-[#c7c4d8] p-3" key={item}>
+                  {index + 1}. {item}
+                </li>
+              ))}
+            </ol>
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InsightPanel({ insight, growth, onGenerateReport, reportLoading }) {
   const insights = [
     `Revenue growth is ${growth.toFixed(1)}% compared with the previous month.`,
     insight?.top_country
@@ -286,8 +347,13 @@ function InsightPanel({ insight, growth }) {
             ))}
           </ul>
         </div>
-        <button className="flex flex-none items-center justify-center gap-3 rounded-xl bg-white px-5 py-3 text-sm font-bold text-[#3525cd] transition hover:shadow-xl active:scale-95" type="button">
-          Generate Full Report
+        <button
+          className="flex flex-none items-center justify-center gap-3 rounded-xl bg-white px-5 py-3 text-sm font-bold text-[#3525cd] transition hover:shadow-xl active:scale-95 disabled:opacity-60"
+          disabled={reportLoading}
+          onClick={onGenerateReport}
+          type="button"
+        >
+          {reportLoading ? "Generating..." : "Generate Full Report"}
           <ArrowRight size={17} />
         </button>
       </div>
@@ -296,6 +362,8 @@ function InsightPanel({ insight, growth }) {
 }
 
 function Overview() {
+  const [report, setReport] = useState(null);
+  const [reportLoading, setReportLoading] = useState(false);
   const { kpi, loading: kpiLoading } = useKPI();
   const { revenueData, loading: revenueLoading } = useRevenue();
   const { products, loading: productsLoading } = useTopProducts();
@@ -314,8 +382,22 @@ function Overview() {
   const latestRevenue = normalizedRevenue.slice(-8);
   const growth = getGrowth(normalizedRevenue);
 
+  async function generateReport() {
+    setReportLoading(true);
+
+    try {
+      const response = await api.get("/api/reports/executive");
+      setReport(response.data);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setReportLoading(false);
+    }
+  }
+
   return (
     <DashboardLayout>
+      {report && <ReportModal onClose={() => setReport(null)} report={report} />}
       {isLoading && (
         <div className="mb-4 rounded-xl border border-[#c7c4d8] bg-white px-4 py-3 text-sm font-medium text-[#464555]">
           Loading dashboard data from backend...
@@ -463,7 +545,12 @@ function Overview() {
       </div>
 
       <div className="mt-6">
-        <InsightPanel growth={growth} insight={insight} />
+        <InsightPanel
+          growth={growth}
+          insight={insight}
+          onGenerateReport={generateReport}
+          reportLoading={reportLoading}
+        />
       </div>
 
       <footer className="mt-8 border-t border-[#c7c4d8] py-5 text-center text-xs font-medium text-[#464555]/80">

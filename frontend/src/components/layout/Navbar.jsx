@@ -6,6 +6,7 @@ const pageTitles = {
   "/revenue": "Revenue Analytics",
   "/products": "Product Analytics",
   "/customers": "Customer Analytics",
+  "/chatbot": "AI Business Assistant",
 };
 
 function Navbar() {

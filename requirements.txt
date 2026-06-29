@@ -4,3 +4,8 @@ sqlalchemy
 psycopg2-binary
 pandas
 python-dotenv
+torch
+transformers
+accelerate
+huggingface_hub
+safetensors

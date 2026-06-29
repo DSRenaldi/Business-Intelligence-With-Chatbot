@@ -4,7 +4,6 @@ import {
   LogOut,
   Package,
   Settings,
-  Sparkles,
   TrendingUp,
   Users,
   Bot
@@ -83,16 +82,6 @@ function Sidebar() {
       </nav>
 
       <div className="space-y-4 px-4 py-6">
-        <div className="rounded-xl border border-[#4f46e5]/30 bg-[#4f46e5]/10 p-4">
-          <p className="mb-3 text-xs font-medium text-[#d5e3fc]">
-            Ready for deeper insights?
-          </p>
-          <button className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#4f46e5] px-3 py-2 text-xs font-bold text-white transition hover:shadow-lg active:scale-95">
-            <Sparkles size={15} />
-            AI Insights
-          </button>
-        </div>
-
         <div className="border-t border-white/10 pt-3">
           <a className="flex items-center gap-4 rounded-lg px-4 py-2 text-sm text-[#d5e3fc] transition hover:bg-[#dae2fd] hover:text-[#131b2e]" href="#">
             <Settings size={18} />
