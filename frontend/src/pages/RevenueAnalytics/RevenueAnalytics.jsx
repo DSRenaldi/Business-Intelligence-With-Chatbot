@@ -13,6 +13,7 @@ import {
   TriangleAlert,
   Zap,
 } from "lucide-react";
+import { useState } from "react";
 import {
   Area,
   AreaChart,
@@ -20,6 +21,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -61,7 +63,7 @@ function formatMonth(value, long = false) {
 
   return date.toLocaleDateString("en-US", {
     month: long ? "long" : "short",
-    year: long ? undefined : "2-digit",
+    year: "numeric",
   });
 }
 
@@ -82,6 +84,29 @@ function getPeriodLabel(data) {
   const last = data[data.length - 1];
 
   return `${formatMonth(first.month)} - ${formatMonth(last.month)}`;
+}
+
+function getQuarterlyRevenue(data) {
+  const quarters = new Map();
+
+  data.forEach((item) => {
+    const date = new Date(item.month);
+    if (Number.isNaN(date.getTime())) return;
+
+    const year = date.getFullYear();
+    const quarter = Math.floor(date.getMonth() / 3) + 1;
+    const key = `${year}-Q${quarter}`;
+    const current = quarters.get(key) || {
+      month: key,
+      monthLabel: `Q${quarter} ${year}`,
+      revenue: 0,
+    };
+
+    current.revenue += Number(item.revenue || 0);
+    quarters.set(key, current);
+  });
+
+  return Array.from(quarters.values());
 }
 
 function MetricCard({ icon: Icon, label, value, detail, tone = "up" }) {
@@ -110,12 +135,11 @@ function MetricCard({ icon: Icon, label, value, detail, tone = "up" }) {
 }
 
 function RevenueBars({ data }) {
-  const latest = data.slice(-12);
-  const best = latest.reduce(
-    (winner, item) => (item.revenue > winner.revenue ? item : winner),
-    latest[0] || { revenue: 0 }
-  );
-  const periodLabel = getPeriodLabel(latest);
+  const [view, setView] = useState("monthly");
+  const monthlyData = data.slice(-12);
+  const quarterlyData = getQuarterlyRevenue(data).slice(-8);
+  const chartData = view === "quarterly" ? quarterlyData : monthlyData;
+  const periodLabel = getPeriodLabel(chartData);
 
   return (
     <div className="rounded-xl border border-[#c7c4d8] bg-white p-6 shadow-sm xl:col-span-8">
@@ -129,19 +153,35 @@ function RevenueBars({ data }) {
           </p>
         </div>
         <div className="flex w-fit items-center gap-1 rounded-lg bg-[#e6eeff] p-1">
-          <button className="rounded-md bg-white px-3 py-1 text-xs font-semibold text-[#3525cd] shadow-sm" type="button">
+          <button
+            className={`rounded-md px-3 py-1 text-xs font-semibold ${
+              view === "monthly"
+                ? "bg-white text-[#3525cd] shadow-sm"
+                : "text-[#464555]"
+            }`}
+            onClick={() => setView("monthly")}
+            type="button"
+          >
             Monthly
           </button>
-          <button className="rounded-md px-3 py-1 text-xs font-semibold text-[#464555]" type="button">
+          <button
+            className={`rounded-md px-3 py-1 text-xs font-semibold ${
+              view === "quarterly"
+                ? "bg-white text-[#3525cd] shadow-sm"
+                : "text-[#464555]"
+            }`}
+            onClick={() => setView("quarterly")}
+            type="button"
+          >
             Quarterly
           </button>
         </div>
       </div>
 
       <div className="h-[320px]">
-        {latest.length ? (
+        {chartData.length ? (
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={latest} margin={{ top: 24, right: 12, bottom: 0, left: 0 }}>
+            <BarChart data={chartData} margin={{ top: 36, right: 12, bottom: 0, left: 0 }}>
               <CartesianGrid stroke="#c7c4d8" strokeDasharray="3 3" vertical={false} />
               <XAxis
                 axisLine={false}
@@ -161,14 +201,13 @@ function RevenueBars({ data }) {
                 formatter={(value) => formatCurrency(value)}
                 labelFormatter={(label) => `Month: ${label}`}
               />
-              <Bar dataKey="revenue" radius={[8, 8, 0, 0]}>
-                {latest.map((item) => (
-                  <Cell
-                    fill={item.month === best.month ? "#4f46e5" : "#3525cd"}
-                    fillOpacity={item.month === best.month ? 1 : 0.35}
-                    key={item.month}
-                  />
-                ))}
+              <Bar dataKey="revenue" fill="#3525cd" radius={[8, 8, 0, 0]}>
+                <LabelList
+                  dataKey="revenue"
+                  formatter={(value) => formatCurrency(value, true)}
+                  position="top"
+                  style={{ fill: "#464555", fontSize: 10, fontWeight: 700 }}
+                />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -262,7 +301,7 @@ function GrowthChart({ data }) {
       </p>
       <div className="h-64">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={growthData}>
+          <AreaChart data={growthData} margin={{ top: 28, right: 12, bottom: 0, left: 0 }}>
             <defs>
               <linearGradient id="growthGradient" x1="0" x2="0" y1="0" y2="1">
                 <stop offset="5%" stopColor="#3525cd" stopOpacity={0.2} />
@@ -283,8 +322,17 @@ function GrowthChart({ data }) {
             />
             <Tooltip formatter={(value) => `${value}%`} />
             <Area
+              activeDot={{ fill: "#3525cd", r: 5, stroke: "#ffffff", strokeWidth: 2 }}
               dataKey="growth"
+              dot={{ fill: "#3525cd", r: 4, stroke: "#ffffff", strokeWidth: 2 }}
               fill="url(#growthGradient)"
+              label={{
+                fill: "#464555",
+                fontSize: 10,
+                fontWeight: 700,
+                formatter: (value) => `${value}%`,
+                position: "top",
+              }}
               stroke="#3525cd"
               strokeWidth={3}
               type="monotone"

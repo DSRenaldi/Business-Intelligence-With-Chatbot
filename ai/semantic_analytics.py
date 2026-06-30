@@ -38,6 +38,31 @@ def _format_number(value):
     return f"{int(value or 0):,}"
 
 
+def _classify_performance(gap_pct):
+    if gap_pct >= 10:
+        return {
+            "state": "outperforming",
+            "description": "berperforma kuat",
+            "comparison": "lebih tinggi",
+            "action": "Prioritasnya adalah mengidentifikasi driver positif dan mereplikasi pola performa ini ke periode lain.",
+        }
+
+    if gap_pct <= -10:
+        return {
+            "state": "underperforming",
+            "description": "berperforma lemah",
+            "comparison": "lebih rendah",
+            "action": "Prioritasnya adalah menginvestigasi area yang menekan revenue dan memperbaiki kontributor yang melemah.",
+        }
+
+    return {
+        "state": "stable",
+        "description": "relatif stabil",
+        "comparison": "relatif sejalan",
+        "action": "Prioritasnya adalah menjaga konsistensi performa dan memantau perubahan pada driver utama.",
+    }
+
+
 def _date_range(year, start_month, end_month):
     start = datetime(year, start_month, 1)
     if end_month == 12:
@@ -106,6 +131,27 @@ def parse_period(message):
         "start": start,
         "end": end,
     }
+
+
+def _parse_period_with_default_year(message):
+    period = parse_period(message)
+
+    if period:
+        return period
+
+    normalized = message.lower()
+
+    for month_name, month in MONTHS.items():
+        if month_name in normalized:
+            start, end = _date_range(2011, month, month)
+            return {
+                "label": f"{month_name.title()} 2011",
+                "start": start,
+                "end": end,
+                "assumed_year": True,
+            }
+
+    return None
 
 
 def _history_text(history):
@@ -442,6 +488,19 @@ def _dimension_from_message(message):
     return "country"
 
 
+def _explicit_dimension_from_message(message):
+    normalized = message.lower()
+
+    if any(term in normalized for term in ["produk", "product", "barang"]):
+        return "product"
+    if any(term in normalized for term in ["customer", "pelanggan", "client"]):
+        return "customer"
+    if any(term in normalized for term in ["negara", "country", "market"]):
+        return "country"
+
+    return None
+
+
 def answer_follow_up(message, db, history):
     if not history:
         return None
@@ -497,9 +556,11 @@ def answer_follow_up(message, db, history):
     top_month_country = max(month_countries.items(), key=lambda item: item[1]) if month_countries else None
     top_parent_country = max(parent_countries.items(), key=lambda item: item[1]) if parent_countries else None
 
+    performance = _classify_performance(gap_pct)
     answer = (
-        f"{current_period['label']} menjadi lemah karena revenue-nya {_format_currency(current_revenue)}, "
-        f"{abs(gap_pct):.1f}% {'lebih rendah' if gap < 0 else 'lebih tinggi'} dibanding {comparison_label} "
+        f"{current_period['label']} {performance['description']} karena revenue-nya "
+        f"{_format_currency(current_revenue)}, {abs(gap_pct):.1f}% "
+        f"{performance['comparison']} dibanding {comparison_label} "
         f"({_format_currency(comparison_revenue)}). "
     )
 
@@ -517,6 +578,8 @@ def answer_follow_up(message, db, history):
             f"{top_parent_product[0]} ({_format_currency(top_parent_product[1])}) untuk melihat apakah volume produk kunci belum optimal."
         )
 
+    answer += f" {performance['action']}"
+
     return {
         "answer": answer,
         "source": "conversation_memory+bi_query_planner",
@@ -525,6 +588,8 @@ def answer_follow_up(message, db, history):
             "parent_period": parent_period["label"],
             "current_revenue": current_revenue,
             "comparison_revenue": comparison_revenue,
+            "performance_state": performance["state"],
+            "variance_percent": round(gap_pct, 1),
         },
     }
 
@@ -739,13 +804,62 @@ def answer_top_contributor(message, db):
     if not any(term in normalized for term in contributor_terms):
         return None
 
-    period = parse_period(message) or {
+    period = _parse_period_with_default_year(message) or {
         "label": "seluruh periode data",
         "start": datetime(2010, 1, 1),
         "end": datetime(2012, 1, 1),
     }
     country = _detect_country(message, db)
-    dimension = _dimension_from_message(message)
+    dimension = _explicit_dimension_from_message(message)
+
+    if not dimension:
+        summaries = []
+
+        for candidate in ["country", "product", "customer"]:
+            rows = _revenue_by_dimension(db, period, candidate, country=country)
+            total = sum(rows.values())
+
+            if not rows or total == 0:
+                continue
+
+            top_name, top_revenue = max(rows.items(), key=lambda item: item[1])
+            share = (top_revenue / total) * 100
+            summaries.append({
+                "dimension": candidate,
+                "name": top_name,
+                "revenue": top_revenue,
+                "share": share,
+                "total": total,
+            })
+
+        if not summaries:
+            return None
+
+        lines = [
+            (
+                f"- {item['dimension']}: {item['name']} dengan revenue "
+                f"{_format_currency(item['revenue'])} ({item['share']:.1f}% dari total dimensi)"
+            )
+            for item in summaries
+        ]
+
+        assumption = " Saya menggunakan tahun 2011 karena pertanyaan tidak menyebut tahun." if period.get("assumed_year") else ""
+
+        return {
+            "answer": (
+                f"Untuk {period['label']}, kontributor terbesar berdasarkan revenue adalah:\n"
+                + "\n".join(lines)
+                + assumption
+            ),
+            "source": "bi_query_planner",
+            "data": {
+                "intent": "top_contributor_multi_dimension",
+                "period": period["label"],
+                "contributors": summaries,
+                "assumed_year": period.get("assumed_year", False),
+            },
+        }
+
     rows = _revenue_by_dimension(db, period, dimension, country=country)
     total = sum(rows.values())
 

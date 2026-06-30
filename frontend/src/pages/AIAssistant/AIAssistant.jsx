@@ -288,25 +288,6 @@ function AIAssistant() {
           </div>
         </footer>
       </div>
-      <div className="pointer-events-none fixed right-8 top-20 z-30 hidden w-64 rounded-xl border border-white/60 bg-white/60 p-4 shadow-lg backdrop-blur xl:block">
-        <div className="mb-3 flex items-center justify-between">
-          <span className="text-xs font-bold uppercase tracking-wide text-[#464555]">Live Context</span>
-          <span className="h-2 w-2 rounded-full bg-[#3525cd]" />
-        </div>
-        <div className="space-y-2 text-sm">
-          <div className="flex justify-between">
-            <span className="text-[#464555]">Mode</span>
-            <span className="font-bold text-[#3525cd]">BI Rules</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-[#464555]">Sources</span>
-            <span className="font-bold">5 APIs</span>
-          </div>
-          <div className="h-1 overflow-hidden rounded-full bg-[#dae2fd]">
-            <div className="h-full w-[62%] bg-[#3525cd]" />
-          </div>
-        </div>
-      </div>
     </DashboardLayout>
   );
 }

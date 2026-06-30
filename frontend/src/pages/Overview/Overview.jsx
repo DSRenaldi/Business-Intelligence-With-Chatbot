@@ -15,6 +15,7 @@ import {
   Bar,
   BarChart,
   Cell,
+  LabelList,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -67,7 +68,7 @@ function formatMonth(value) {
 
   return date.toLocaleDateString("en-US", {
     month: "short",
-    year: "2-digit",
+    year: "numeric",
   });
 }
 
@@ -79,6 +80,29 @@ function getGrowth(data) {
 
   if (!previous) return 0;
   return ((current - previous) / previous) * 100;
+}
+
+function getQuarterlyRevenue(data) {
+  const quarters = new Map();
+
+  data.forEach((item) => {
+    const date = new Date(item.month);
+    if (Number.isNaN(date.getTime())) return;
+
+    const year = date.getFullYear();
+    const quarter = Math.floor(date.getMonth() / 3) + 1;
+    const key = `${year}-Q${quarter}`;
+    const current = quarters.get(key) || {
+      month: key,
+      monthLabel: `Q${quarter} ${year}`,
+      revenue: 0,
+    };
+
+    current.revenue += Number(item.revenue || 0);
+    quarters.set(key, current);
+  });
+
+  return Array.from(quarters.values());
 }
 
 function KPITile({ icon: Icon, label, value, accent, trend = "Live" }) {
@@ -229,14 +253,14 @@ function OrdersTrend({ data }) {
       <div className="flex h-44 items-end gap-2">
         {latest.map((item, index) => {
           const height = Math.max((Number(item.revenue || 0) / maxRevenue) * 100, 10);
-          const isLatest = index === latest.length - 1;
 
           return (
-            <div className="flex h-full flex-1 flex-col justify-end" key={`${item.month}-${index}`}>
+            <div className="flex h-full flex-1 flex-col justify-end gap-1" key={`${item.month}-${index}`}>
+              <span className="truncate text-center text-[10px] font-semibold text-[#464555]">
+                {formatCurrency(item.revenue, true)}
+              </span>
               <div
-                className={`w-full rounded-t transition ${
-                  isLatest ? "bg-[#3525cd]" : "bg-[#3525cd]/20 hover:bg-[#3525cd]/40"
-                }`}
+                className="w-full rounded-t bg-[#3525cd] transition hover:opacity-85"
                 style={{ height: `${height}%` }}
                 title={`${formatMonth(item.month)}: ${formatCurrency(item.revenue)}`}
               />
@@ -247,12 +271,10 @@ function OrdersTrend({ data }) {
       <div className="mt-3 flex justify-between gap-2">
         {latest.map((item, index) => (
           <span
-            className={`w-full truncate text-center text-[10px] font-semibold uppercase ${
-              index === latest.length - 1 ? "text-[#3525cd]" : "text-[#464555]"
-            }`}
+            className="w-full truncate text-center text-[10px] font-semibold uppercase text-[#464555]"
             key={`${item.month}-label-${index}`}
           >
-            {formatMonth(item.month).split(" ")[0]}
+            {formatMonth(item.month)}
           </span>
         ))}
       </div>
@@ -364,6 +386,7 @@ function InsightPanel({ insight, growth, onGenerateReport, reportLoading }) {
 function Overview() {
   const [report, setReport] = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
+  const [revenueView, setRevenueView] = useState("monthly");
   const { kpi, loading: kpiLoading } = useKPI();
   const { revenueData, loading: revenueLoading } = useRevenue();
   const { products, loading: productsLoading } = useTopProducts();
@@ -379,7 +402,13 @@ function Overview() {
     revenue: Number(item.revenue || 0),
   }));
 
-  const latestRevenue = normalizedRevenue.slice(-8);
+  const yearlyRevenue = normalizedRevenue.filter((item) => {
+    const date = new Date(item.month);
+    return !Number.isNaN(date.getTime()) && date.getFullYear() === 2011;
+  });
+  const quarterlyRevenue = getQuarterlyRevenue(normalizedRevenue).slice(-8);
+  const revenueChartData =
+    revenueView === "quarterly" ? quarterlyRevenue : yearlyRevenue;
   const growth = getGrowth(normalizedRevenue);
 
   async function generateReport() {
@@ -449,17 +478,33 @@ function Overview() {
               Monthly Revenue Trend
             </h3>
             <div className="flex gap-2">
-              <button className="rounded-md bg-[#3525cd] px-3 py-1 text-xs font-semibold text-white" type="button">
+              <button
+                className={`rounded-md px-3 py-1 text-xs font-semibold ${
+                  revenueView === "monthly"
+                    ? "bg-[#3525cd] text-white"
+                    : "bg-[#dce9ff] text-[#464555]"
+                }`}
+                onClick={() => setRevenueView("monthly")}
+                type="button"
+              >
                 Monthly
               </button>
-              <button className="rounded-md bg-[#dce9ff] px-3 py-1 text-xs font-semibold text-[#464555]" type="button">
+              <button
+                className={`rounded-md px-3 py-1 text-xs font-semibold ${
+                  revenueView === "quarterly"
+                    ? "bg-[#3525cd] text-white"
+                    : "bg-[#dce9ff] text-[#464555]"
+                }`}
+                onClick={() => setRevenueView("quarterly")}
+                type="button"
+              >
                 Quarterly
               </button>
             </div>
           </div>
           <div className="h-[280px]">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={latestRevenue}>
+              <AreaChart data={revenueChartData} margin={{ top: 28, right: 8, bottom: 0, left: 8 }}>
                 <defs>
                   <linearGradient id="revenueGradient" x1="0" x2="0" y1="0" y2="1">
                     <stop offset="5%" stopColor="#3525cd" stopOpacity={0.22} />
@@ -469,14 +514,26 @@ function Overview() {
                 <XAxis
                   axisLine={false}
                   dataKey="monthLabel"
+                  interval={0}
+                  minTickGap={0}
+                  padding={{ left: 28, right: 28 }}
                   tickLine={false}
                   tick={{ fill: "#464555", fontSize: 11, fontWeight: 600 }}
                 />
                 <YAxis hide domain={["dataMin", "dataMax"]} />
                 <Tooltip formatter={(value) => formatCurrency(value)} />
                 <Area
+                  activeDot={{ fill: "#3525cd", r: 5, stroke: "#ffffff", strokeWidth: 2 }}
                   dataKey="revenue"
+                  dot={{ fill: "#3525cd", r: 4, stroke: "#ffffff", strokeWidth: 2 }}
                   fill="url(#revenueGradient)"
+                  label={{
+                    fill: "#464555",
+                    fontSize: 10,
+                    fontWeight: 700,
+                    formatter: (value) => formatCurrency(value, true),
+                    position: "top",
+                  }}
                   stroke="#3525cd"
                   strokeWidth={3}
                   type="monotone"
@@ -500,18 +557,25 @@ function Overview() {
           </h3>
           <div className="h-[320px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={products.slice(0, 6)} layout="vertical">
-                <XAxis hide type="number" />
+              <BarChart data={products.slice(0, 6)} layout="vertical" margin={{ top: 8, right: 72, bottom: 8, left: 0 }}>
+                <XAxis domain={[0, "dataMax + 30000"]} hide type="number" />
                 <YAxis
                   axisLine={false}
                   dataKey="Description"
                   tickLine={false}
-                  tick={{ fill: "#464555", fontSize: 11 }}
+                  tick={{ fill: "#0d1c2e", fontSize: 12, fontWeight: 700 }}
                   type="category"
-                  width={150}
+                  width={190}
                 />
                 <Tooltip formatter={(value) => formatCurrency(value)} />
-                <Bar dataKey="revenue" fill="#3525cd" radius={[0, 6, 6, 0]} />
+                <Bar dataKey="revenue" fill="#3525cd" radius={[0, 6, 6, 0]}>
+                  <LabelList
+                    dataKey="revenue"
+                    formatter={(value) => formatCurrency(value, true)}
+                    position="right"
+                    style={{ fill: "#464555", fontSize: 11, fontWeight: 700 }}
+                  />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>

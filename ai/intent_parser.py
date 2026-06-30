@@ -32,7 +32,7 @@ def _detect_ranks(message):
 
     if any(term in normalized for term in ["tertinggi", "terbesar", "top", "paling besar", "paling tinggi"]):
         ranks.append("top")
-    if any(term in normalized for term in ["menengah", "sedang", "median", "middle"]):
+    if any(term in normalized for term in ["menengah", "sedang", "median", "middle", "biasa saja", "rata-rata", "average", "normal"]):
         ranks.append("middle")
     if any(term in normalized for term in ["terkecil", "terendah", "paling kecil", "paling rendah", "bottom"]):
         ranks.append("bottom")
@@ -74,3 +74,44 @@ def parse_structured_intent(message):
         }
 
     return None
+
+
+def normalize_llm_plan(plan):
+    if not plan or plan.get("needs_clarification"):
+        return None
+
+    if plan.get("intent") != "rank_distribution_by_period":
+        return None
+
+    dimension = plan.get("dimension")
+    ranks = plan.get("ranks") or []
+    period = plan.get("period") or {}
+    month = period.get("month")
+
+    if dimension not in {"product", "customer", "country"}:
+        return None
+
+    if not ranks or not month:
+        return None
+
+    year = int(period.get("year") or 2011)
+    start, end = _date_range(year, int(month), int(month))
+
+    metric = plan.get("metric")
+    if metric == "orders":
+        metric = "quantity"
+    elif metric not in {"revenue", "quantity"}:
+        metric = "revenue"
+
+    return {
+        "intent": "rank_distribution_by_period",
+        "dimension": dimension,
+        "metric": metric,
+        "ranks": [rank for rank in ranks if rank in {"top", "middle", "bottom"}],
+        "period": {
+            "label": f"{year}-{int(month):02d}",
+            "start": start,
+            "end": end,
+            "assumed_year": period.get("year") is None,
+        },
+    }

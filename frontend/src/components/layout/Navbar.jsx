@@ -1,4 +1,4 @@
-import { Bell, Download, Menu, SlidersHorizontal } from "lucide-react";
+import { Menu } from "lucide-react";
 import { useLocation } from "react-router-dom";
 
 const pageTitles = {
@@ -22,22 +22,8 @@ function Navbar() {
         <h2 className="truncate text-xl font-bold text-[#0d1c2e]">
           {title}
         </h2>
-        <div className="hidden items-center gap-3 md:flex">
-          <button className="flex items-center gap-2 rounded-lg px-2 py-1 text-xs font-semibold text-[#464555] transition hover:text-[#3525cd]" type="button">
-            <SlidersHorizontal size={15} />
-            Date Range
-          </button>
-          <button className="flex items-center gap-2 rounded-lg px-2 py-1 text-xs font-semibold text-[#464555] transition hover:text-[#3525cd]" type="button">
-            <Download size={15} />
-            Export
-          </button>
-        </div>
       </div>
       <div className="flex items-center gap-4">
-        <button className="relative text-[#464555] transition hover:text-[#3525cd]" type="button" aria-label="Notifications">
-          <Bell size={20} />
-          <span className="absolute right-0 top-0 h-2 w-2 rounded-full border-2 border-[#f8f9ff] bg-[#ba1a1a]" />
-        </button>
         <div className="flex items-center gap-3 border-l border-[#c7c4d8] pl-4">
           <div className="hidden text-right sm:block">
             <p className="text-xs font-bold text-[#0d1c2e]">Alex Thompson</p>

@@ -3,7 +3,6 @@ import {
   LayoutDashboard,
   LogOut,
   Package,
-  Settings,
   TrendingUp,
   Users,
   Bot
@@ -83,10 +82,6 @@ function Sidebar() {
 
       <div className="space-y-4 px-4 py-6">
         <div className="border-t border-white/10 pt-3">
-          <a className="flex items-center gap-4 rounded-lg px-4 py-2 text-sm text-[#d5e3fc] transition hover:bg-[#dae2fd] hover:text-[#131b2e]" href="#">
-            <Settings size={18} />
-            Settings
-          </a>
           <a className="flex items-center gap-4 rounded-lg px-4 py-2 text-sm text-[#ffdad6] transition hover:bg-[#ffdad6] hover:text-[#93000a]" href="#">
             <LogOut size={18} />
             Logout

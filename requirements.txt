@@ -9,3 +9,4 @@ transformers
 accelerate
 huggingface_hub
 safetensors
+peft

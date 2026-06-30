@@ -4,11 +4,13 @@ import {
   CheckCircle2,
   CircleDollarSign,
   Filter,
+  Info,
   Package,
   Search,
   Sparkles,
   Star,
   TrendingUp,
+  X,
 } from "lucide-react";
 import {
   Cell,
@@ -72,6 +74,7 @@ function ProductMetric({ icon: Icon, label, value, detail, tone = "primary" }) {
     primary: "bg-[#e2dfff] text-[#3525cd]",
     yellow: "bg-yellow-50 text-yellow-600",
   }[tone];
+  const isLongValue = String(value || "").length > 22;
 
   return (
     <div className="flex min-h-[160px] flex-col gap-3 rounded-xl border border-[#c7c4d8] bg-white p-6 shadow-sm">
@@ -84,7 +87,11 @@ function ProductMetric({ icon: Icon, label, value, detail, tone = "primary" }) {
         </div>
       </div>
       <div>
-        <div className="text-3xl font-bold text-[#0d1c2e] sm:text-4xl">
+        <div
+          className={`font-bold leading-tight text-[#0d1c2e] ${
+            isLongValue ? "text-lg sm:text-xl" : "text-3xl sm:text-4xl"
+          }`}
+        >
           {value}
         </div>
         <div className="mt-2 flex items-center gap-2 text-xs font-semibold text-[#3525cd]">
@@ -194,6 +201,7 @@ function ContributionDonut({ topProducts, totalRevenue }) {
 }
 
 function TierDistribution({ topProducts, worstProducts }) {
+  const [explanationOpen, setExplanationOpen] = useState(false);
   const bestRevenue = topProducts.slice(0, 3).reduce((sum, item) => sum + Number(item.revenue || 0), 0);
   const standardRevenue = topProducts.slice(3, 8).reduce((sum, item) => sum + Number(item.revenue || 0), 0);
   const longTailRevenue = worstProducts.reduce((sum, item) => sum + Math.abs(Number(item.revenue || 0)), 0);
@@ -201,9 +209,45 @@ function TierDistribution({ topProducts, worstProducts }) {
 
   return (
     <div className="rounded-xl border border-[#c7c4d8] bg-white p-6 shadow-sm lg:col-span-12">
-      <h3 className="mb-5 text-xl font-semibold text-[#0d1c2e]">
-        Category Revenue Distribution
-      </h3>
+      {explanationOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0d1c2e]/55 p-4">
+          <div className="w-full max-w-xl rounded-xl bg-white p-6 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <h3 className="text-xl font-bold text-[#0d1c2e]">Category Revenue Distribution</h3>
+              <button className="rounded-lg p-2 text-[#464555] hover:bg-[#dce9ff]" onClick={() => setExplanationOpen(false)} type="button">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="space-y-3 text-sm leading-6 text-[#464555]">
+              <p>
+                Card ini menunjukkan seberapa besar revenue tersebar pada kelompok produk:
+                best sellers, standard, long tail, dan emerging.
+              </p>
+              <p>
+                Tujuannya adalah membantu melihat apakah revenue terlalu bergantung pada sedikit produk
+                atau sudah tersebar sehat di banyak produk.
+              </p>
+              <p>
+                Jika Best Sellers terlalu dominan, prioritasnya adalah menjaga stok produk utama sekaligus
+                mengembangkan produk standard/emerging agar risiko ketergantungan menurun.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      <div className="mb-5 flex items-center justify-between gap-4">
+        <h3 className="text-xl font-semibold text-[#0d1c2e]">
+          Category Revenue Distribution
+        </h3>
+        <button
+          className="flex items-center gap-2 rounded-lg border border-[#c7c4d8] px-3 py-2 text-xs font-semibold text-[#464555] transition hover:border-[#3525cd] hover:text-[#3525cd]"
+          onClick={() => setExplanationOpen(true)}
+          type="button"
+        >
+          <Info size={15} />
+          Explain
+        </button>
+      </div>
       <div className="grid h-auto min-h-64 grid-cols-1 gap-2 sm:grid-cols-4 sm:grid-rows-2">
         <div className="flex min-h-36 flex-col justify-end rounded-lg bg-[#3525cd] p-5 text-white sm:col-span-2 sm:row-span-2">
           <span className="text-sm font-bold">Best Sellers</span>
@@ -228,11 +272,22 @@ function TierDistribution({ topProducts, worstProducts }) {
 
 function ProductTable({ products, totalRevenue }) {
   const [query, setQuery] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [minContribution, setMinContribution] = useState("");
   const [page, setPage] = useState(1);
+  const [jumpPage, setJumpPage] = useState("");
   const pageSize = 10;
-  const filteredProducts = products.filter((product) =>
-    product.Description?.toLowerCase().includes(query.toLowerCase())
-  );
+  const filteredProducts = products.filter((product, index) => {
+    const revenue = Number(product.revenue || 0);
+    const contribution = totalRevenue ? (revenue / totalRevenue) * 100 : 0;
+    const status = getStatus(index, contribution);
+    const matchesSearch = product.Description?.toLowerCase().includes(query.toLowerCase());
+    const matchesStatus = statusFilter === "all" || status === statusFilter;
+    const matchesContribution = !minContribution || contribution >= Number(minContribution);
+
+    return matchesSearch && matchesStatus && matchesContribution;
+  });
   const totalPages = Math.max(Math.ceil(filteredProducts.length / pageSize), 1);
   const currentPage = Math.min(page, totalPages);
   const startIndex = (currentPage - 1) * pageSize;
@@ -243,6 +298,13 @@ function ProductTable({ products, totalRevenue }) {
   function handleQueryChange(event) {
     setQuery(event.target.value);
     setPage(1);
+  }
+
+  function handleJumpToPage(event) {
+    event.preventDefault();
+    const targetPage = Math.min(Math.max(Number(jumpPage || 1), 1), totalPages);
+    setPage(targetPage);
+    setJumpPage("");
   }
 
   return (
@@ -262,12 +324,67 @@ function ProductTable({ products, totalRevenue }) {
               value={query}
             />
           </div>
-          <button className="flex items-center justify-center gap-2 rounded-lg border border-[#c7c4d8] px-4 py-2 text-sm font-semibold text-[#464555] transition hover:bg-[#e6eeff]" type="button">
+          <button
+            className={`flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold transition ${
+              filtersOpen
+                ? "border-[#3525cd] bg-[#3525cd]/5 text-[#3525cd]"
+                : "border-[#c7c4d8] text-[#464555] hover:bg-[#e6eeff]"
+            }`}
+            onClick={() => setFiltersOpen((value) => !value)}
+            type="button"
+          >
             <Filter size={17} />
             Filter
           </button>
         </div>
       </div>
+      {filtersOpen && (
+        <div className="grid grid-cols-1 gap-4 border-b border-[#c7c4d8] bg-[#f8f9ff] px-6 py-4 sm:grid-cols-3">
+          <label className="text-xs font-semibold uppercase tracking-wide text-[#464555]">
+            Status
+            <select
+              className="mt-2 w-full rounded-lg border border-[#c7c4d8] bg-white px-3 py-2 text-sm normal-case text-[#0d1c2e] outline-none"
+              onChange={(event) => {
+                setStatusFilter(event.target.value);
+                setPage(1);
+              }}
+              value={statusFilter}
+            >
+              <option value="all">All Status</option>
+              <option value="Best Seller">Best Seller</option>
+              <option value="High Growth">High Growth</option>
+              <option value="Stable">Stable</option>
+            </select>
+          </label>
+          <label className="text-xs font-semibold uppercase tracking-wide text-[#464555]">
+            Min Contribution %
+            <input
+              className="mt-2 w-full rounded-lg border border-[#c7c4d8] bg-white px-3 py-2 text-sm normal-case text-[#0d1c2e] outline-none"
+              min="0"
+              onChange={(event) => {
+                setMinContribution(event.target.value);
+                setPage(1);
+              }}
+              placeholder="e.g. 1"
+              type="number"
+              value={minContribution}
+            />
+          </label>
+          <div className="flex items-end">
+            <button
+              className="w-full rounded-lg border border-[#c7c4d8] bg-white px-3 py-2 text-sm font-semibold text-[#464555] hover:bg-[#e6eeff]"
+              onClick={() => {
+                setStatusFilter("all");
+                setMinContribution("");
+                setPage(1);
+              }}
+              type="button"
+            >
+              Reset Filters
+            </button>
+          </div>
+        </div>
+      )}
       <div className="overflow-x-auto">
         <table className="w-full min-w-[820px] text-left">
           <thead className="bg-[#eff4ff]">
@@ -326,7 +443,7 @@ function ProductTable({ products, totalRevenue }) {
           Showing {number.format(displayStart)}-{number.format(displayEnd)} of{" "}
           {number.format(filteredProducts.length)} products
         </span>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <button
             className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#c7c4d8] bg-white text-[#464555] disabled:cursor-not-allowed disabled:opacity-40"
             disabled={currentPage === 1}
@@ -338,6 +455,23 @@ function ProductTable({ products, totalRevenue }) {
           <span className="min-w-20 text-center text-sm font-semibold text-[#464555]">
             {currentPage} / {totalPages}
           </span>
+          <form className="flex items-center gap-2" onSubmit={handleJumpToPage}>
+            <input
+              className="h-9 w-16 rounded-lg border border-[#c7c4d8] bg-white px-2 text-center text-sm text-[#0d1c2e] outline-none focus:border-[#3525cd]"
+              min="1"
+              max={totalPages}
+              onChange={(event) => setJumpPage(event.target.value)}
+              placeholder="Page"
+              type="number"
+              value={jumpPage}
+            />
+            <button
+              className="h-9 rounded-lg border border-[#c7c4d8] bg-white px-3 text-sm font-semibold text-[#464555] transition hover:bg-[#e6eeff]"
+              type="submit"
+            >
+              Go
+            </button>
+          </form>
           <button
             className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#c7c4d8] bg-white text-[#464555] disabled:cursor-not-allowed disabled:opacity-40"
             disabled={currentPage === totalPages}
@@ -352,7 +486,62 @@ function ProductTable({ products, totalRevenue }) {
   );
 }
 
+function ProductAnalysisModal({ onClose, summary }) {
+  if (!summary) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0d1c2e]/55 p-4">
+      <div className="max-h-[86vh] w-full max-w-3xl overflow-hidden rounded-xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-[#c7c4d8] px-6 py-4">
+          <div>
+            <h2 className="text-xl font-bold text-[#0d1c2e]">Product Performance Analysis</h2>
+            <p className="text-xs font-medium text-[#464555]">Revenue concentration and portfolio action summary</p>
+          </div>
+          <button className="rounded-lg p-2 text-[#464555] hover:bg-[#dce9ff]" onClick={onClose} type="button">
+            <X size={20} />
+          </button>
+        </div>
+        <div className="max-h-[72vh] space-y-5 overflow-y-auto p-6 text-sm text-[#0d1c2e]">
+          <section className="rounded-lg bg-[#f8f9ff] p-4">
+            <h3 className="mb-2 font-bold text-[#3525cd]">Executive Takeaway</h3>
+            <p>
+              Top 10 products contribute {summary.top10Share.toFixed(1)}% of total revenue.
+              Best selling product is {summary.bestProduct?.Description || "N/A"} with{" "}
+              {formatCurrency(summary.bestProduct?.revenue)} revenue.
+            </p>
+          </section>
+          <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="rounded-lg border border-[#c7c4d8] p-4">
+              <h3 className="mb-2 font-bold text-[#3525cd]">Portfolio Health</h3>
+              <p>Active products: {number.format(summary.activeProducts)}</p>
+              <p>Average product revenue: {formatCurrency(summary.averageProductRevenue)}</p>
+              <p>Top 10 revenue: {formatCurrency(summary.top10Revenue)}</p>
+            </div>
+            <div className="rounded-lg border border-[#c7c4d8] p-4">
+              <h3 className="mb-2 font-bold text-[#3525cd]">Risk Signal</h3>
+              <p>
+                {summary.top10Share >= 40
+                  ? "Revenue is concentrated in a small set of best sellers. Monitor stock availability and diversify mid-tier products."
+                  : "Revenue concentration is moderate. Continue monitoring product contribution mix."}
+              </p>
+            </div>
+          </section>
+          <section>
+            <h3 className="mb-2 font-bold text-[#3525cd]">Recommended Actions</h3>
+            <ol className="space-y-2">
+              <li className="rounded-lg border border-[#c7c4d8] p-3">1. Protect stock and visibility for the highest revenue products.</li>
+              <li className="rounded-lg border border-[#c7c4d8] p-3">2. Review worst-performing products for returns, pricing, or assortment issues.</li>
+              <li className="rounded-lg border border-[#c7c4d8] p-3">3. Promote promising mid-tier products to reduce dependence on top sellers.</li>
+            </ol>
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ProductAnalytics() {
+  const [analysisOpen, setAnalysisOpen] = useState(false);
   const { kpi, loading: kpiLoading } = useKPI();
   const { products: topProducts, loading: topLoading } = useTopProducts(5000);
   const { products: worstProducts, loading: worstLoading } = useWorstProducts();
@@ -372,6 +561,19 @@ function ProductAnalytics() {
 
   return (
     <DashboardLayout>
+      {analysisOpen && (
+        <ProductAnalysisModal
+          onClose={() => setAnalysisOpen(false)}
+          summary={{
+            activeProducts,
+            averageProductRevenue,
+            bestProduct,
+            top10Revenue,
+            top10Share,
+          }}
+        />
+      )}
+
       {isLoading && (
         <div className="mb-4 rounded-xl border border-[#c7c4d8] bg-white px-4 py-3 text-sm font-medium text-[#464555]">
           Loading product analytics from backend...
@@ -424,7 +626,11 @@ function ProductAnalytics() {
               Consider expanding marketing for mid-tier items to diversify revenue streams.
             </p>
           </div>
-          <button className="flex items-center justify-center gap-2 rounded-lg bg-[#4f46e5] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90" type="button">
+          <button
+            className="flex items-center justify-center gap-2 rounded-lg bg-[#4f46e5] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+            onClick={() => setAnalysisOpen(true)}
+            type="button"
+          >
             <Sparkles size={16} />
             Full Analysis
           </button>

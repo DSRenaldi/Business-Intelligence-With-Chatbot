@@ -1,6 +1,7 @@
 import {
   Download,
   Filter,
+  Info,
   MoreVertical,
   Repeat,
   Search,
@@ -10,6 +11,7 @@ import {
   UserPlus,
   Users,
   WalletCards,
+  X,
 } from "lucide-react";
 import {
   Bar,
@@ -21,6 +23,7 @@ import {
   Tooltip,
   XAxis,
   YAxis,
+  LabelList,
 } from "recharts";
 import { useEffect, useMemo, useState } from "react";
 
@@ -91,16 +94,65 @@ function MetricCard({ icon: Icon, label, value, detail, tone = "up" }) {
 }
 
 function TopCustomersBars({ customers, totalRevenue }) {
+  const [reportOpen, setReportOpen] = useState(false);
   const top = customers.slice(0, 5);
   const maxRevenue = Math.max(...top.map((item) => Number(item.revenue || 0)), 1);
+  const topRevenue = top.reduce((sum, item) => sum + Number(item.revenue || 0), 0);
+  const topShare = totalRevenue ? (topRevenue / totalRevenue) * 100 : 0;
 
   return (
     <div className="rounded-xl border border-[#c7c4d8] bg-white p-6 shadow-sm lg:col-span-7">
+      {reportOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0d1c2e]/55 p-4">
+          <div className="w-full max-w-2xl rounded-xl bg-white p-6 shadow-2xl">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-xl font-bold text-[#0d1c2e]">Top Customers Report</h3>
+                <p className="text-sm text-[#464555]">
+                  Top 5 customers contribute {topShare.toFixed(1)}% of total revenue.
+                </p>
+              </div>
+              <button className="rounded-lg p-2 text-[#464555] hover:bg-[#dce9ff]" onClick={() => setReportOpen(false)} type="button">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="space-y-3">
+              {top.map((customer, index) => {
+                const revenue = Number(customer.revenue || 0);
+                const share = totalRevenue ? (revenue / totalRevenue) * 100 : 0;
+
+                return (
+                  <div className="rounded-lg border border-[#c7c4d8] p-4" key={customer.CustomerID || index}>
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="font-bold text-[#0d1c2e]">Customer {customer.CustomerID}</p>
+                        <p className="text-sm text-[#464555]">{customer.Country}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-[#3525cd]">{formatCurrency(revenue)}</p>
+                        <p className="text-xs text-[#464555]">{share.toFixed(2)}% share</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-4 rounded-lg bg-[#f8f9ff] p-4 text-sm leading-6 text-[#464555]">
+              Prioritaskan customer dengan revenue tinggi untuk retention, account management,
+              dan loyalty program agar kontribusi revenue tetap stabil.
+            </div>
+          </div>
+        </div>
+      )}
       <div className="mb-6 flex items-center justify-between gap-4">
         <h3 className="text-xl font-semibold text-[#0d1c2e]">
           Top Customers by Revenue
         </h3>
-        <button className="text-sm font-semibold text-[#3525cd]" type="button">
+        <button
+          className="text-sm font-semibold text-[#3525cd] transition hover:underline"
+          onClick={() => setReportOpen(true)}
+          type="button"
+        >
           View Report
         </button>
       </div>
@@ -232,6 +284,7 @@ function CountryRevenueBars({ countryRevenue }) {
 }
 
 function PurchaseFrequency({ customers }) {
+  const [explanationOpen, setExplanationOpen] = useState(false);
   const buckets = [
     { label: "1", min: 1, max: 1 },
     { label: "2", min: 2, max: 2 },
@@ -253,12 +306,47 @@ function PurchaseFrequency({ customers }) {
 
   return (
     <div className="rounded-xl border border-[#c7c4d8] bg-white p-6 shadow-sm lg:col-span-6">
-      <h3 className="mb-6 text-xl font-semibold text-[#0d1c2e]">
-        Purchase Frequency
-      </h3>
+      {explanationOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0d1c2e]/55 p-4">
+          <div className="w-full max-w-xl rounded-xl bg-white p-6 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <h3 className="text-xl font-bold text-[#0d1c2e]">Purchase Frequency</h3>
+              <button className="rounded-lg p-2 text-[#464555] hover:bg-[#dce9ff]" onClick={() => setExplanationOpen(false)} type="button">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="space-y-3 text-sm leading-6 text-[#464555]">
+              <p>
+                Chart ini menunjukkan jumlah customer berdasarkan total order yang pernah dilakukan.
+              </p>
+              <p>
+                Sumbu X menunjukkan frekuensi order per customer, sedangkan angka di atas bar menunjukkan
+                berapa banyak customer dalam kelompok frekuensi tersebut.
+              </p>
+              <p>
+                Secara bisnis, chart ini membantu melihat apakah customer base didominasi pembeli satu kali
+                atau sudah banyak repeat buyer yang bisa ditargetkan untuk loyalty program.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      <div className="mb-6 flex items-center justify-between gap-4">
+        <h3 className="text-xl font-semibold text-[#0d1c2e]">
+          Purchase Frequency
+        </h3>
+        <button
+          className="flex items-center gap-2 rounded-lg border border-[#c7c4d8] px-3 py-2 text-xs font-semibold text-[#464555] transition hover:border-[#3525cd] hover:text-[#3525cd]"
+          onClick={() => setExplanationOpen(true)}
+          type="button"
+        >
+          <Info size={15} />
+          Explain
+        </button>
+      </div>
       <div className="h-64">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={buckets}>
+          <BarChart data={buckets} margin={{ top: 28, right: 12, bottom: 8, left: 12 }}>
             <XAxis
               axisLine={false}
               dataKey="label"
@@ -268,6 +356,12 @@ function PurchaseFrequency({ customers }) {
             <YAxis hide />
             <Tooltip formatter={(value) => `${number.format(value)} customers`} />
             <Bar dataKey="count" fill="#dae2fd" radius={[5, 5, 0, 0]}>
+              <LabelList
+                dataKey="count"
+                formatter={(value) => number.format(value)}
+                position="top"
+                style={{ fill: "#464555", fontSize: 10, fontWeight: 700 }}
+              />
               {buckets.map((bucket) => (
                 <Cell fill={bucket.label === "5" ? "#3525cd" : "#dae2fd"} key={bucket.label} />
               ))}
@@ -275,17 +369,70 @@ function PurchaseFrequency({ customers }) {
           </BarChart>
         </ResponsiveContainer>
       </div>
+      <div className="mt-3 flex items-center justify-between text-xs font-medium text-[#464555]">
+        <span>Order frequency per customer</span>
+        <span>Customer count</span>
+      </div>
     </div>
   );
 }
 
+function getCustomerActionInsight(customer) {
+  const revenue = Number(customer?.revenue || 0);
+  const orders = Number(customer?.orders || 0);
+
+  if (revenue >= 50000 && orders >= 10) {
+    return {
+      title: "High-value repeat customer",
+      detail:
+        "Customer ini memiliki revenue dan frekuensi order tinggi. Prioritaskan loyalty program, account management, dan early access campaign untuk menjaga retensi.",
+      action: "Recommended action: retention priority",
+    };
+  }
+
+  if (revenue >= 50000 && orders < 10) {
+    return {
+      title: "High-value but low frequency",
+      detail:
+        "Customer ini menghasilkan revenue besar dengan frekuensi order relatif rendah. Fokuskan analisis pada average order value dan peluang meningkatkan repeat purchase.",
+      action: "Recommended action: increase purchase frequency",
+    };
+  }
+
+  if (orders >= 10) {
+    return {
+      title: "Frequent buyer",
+      detail:
+        "Customer ini sering melakukan order, tetapi revenue per order perlu dipantau. Cocok untuk cross-sell atau bundle strategy agar nilai transaksi meningkat.",
+      action: "Recommended action: grow basket size",
+    };
+  }
+
+  return {
+    title: "Low-frequency customer",
+    detail:
+      "Customer ini belum menunjukkan frekuensi pembelian tinggi. Gunakan campaign reactivation atau rekomendasi produk untuk mendorong pembelian berikutnya.",
+    action: "Recommended action: reactivation campaign",
+  };
+}
+
 function CustomerTable({ customers }) {
   const [query, setQuery] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [countryFilter, setCountryFilter] = useState("all");
+  const [minOrders, setMinOrders] = useState("");
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [page, setPage] = useState(1);
+  const [jumpPage, setJumpPage] = useState("");
   const pageSize = 10;
+  const countries = Array.from(new Set(customers.map((customer) => customer.Country).filter(Boolean))).sort();
   const filtered = customers.filter((customer) => {
     const searchable = `${customer.CustomerID} ${customer.Country}`.toLowerCase();
-    return searchable.includes(query.toLowerCase());
+    const matchesSearch = searchable.includes(query.toLowerCase());
+    const matchesCountry = countryFilter === "all" || customer.Country === countryFilter;
+    const matchesOrders = !minOrders || Number(customer.orders || 0) >= Number(minOrders);
+
+    return matchesSearch && matchesCountry && matchesOrders;
   });
   const totalPages = Math.max(Math.ceil(filtered.length / pageSize), 1);
   const currentPage = Math.min(page, totalPages);
@@ -297,8 +444,60 @@ function CustomerTable({ customers }) {
     setPage(1);
   }
 
+  function handleJumpToPage(event) {
+    event.preventDefault();
+    const targetPage = Math.min(Math.max(Number(jumpPage || 1), 1), totalPages);
+    setPage(targetPage);
+    setJumpPage("");
+  }
+
   return (
     <div className="overflow-hidden rounded-xl border border-[#c7c4d8] bg-white shadow-sm lg:col-span-12">
+      {selectedCustomer && (
+        (() => {
+          const insight = getCustomerActionInsight(selectedCustomer);
+          const revenue = Number(selectedCustomer.revenue || 0);
+          const orders = Number(selectedCustomer.orders || 0);
+          const averageOrderValue = orders ? revenue / orders : 0;
+
+          return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0d1c2e]/55 p-4">
+          <div className="w-full max-w-xl rounded-xl bg-white p-6 shadow-2xl">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-xl font-bold text-[#0d1c2e]">
+                  Customer {selectedCustomer.CustomerID}
+                </h3>
+                <p className="text-sm text-[#464555]">{selectedCustomer.Country}</p>
+              </div>
+              <button className="rounded-lg p-2 text-[#464555] hover:bg-[#dce9ff]" onClick={() => setSelectedCustomer(null)} type="button">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="rounded-lg border border-[#c7c4d8] p-4">
+                <p className="text-xs font-semibold uppercase text-[#464555]">Revenue</p>
+                <p className="mt-1 text-xl font-bold text-[#0d1c2e]">{formatCurrency(selectedCustomer.revenue)}</p>
+              </div>
+              <div className="rounded-lg border border-[#c7c4d8] p-4">
+                <p className="text-xs font-semibold uppercase text-[#464555]">Orders</p>
+                <p className="mt-1 text-xl font-bold text-[#0d1c2e]">{number.format(Number(selectedCustomer.orders || 0))}</p>
+              </div>
+            </div>
+            <div className="mt-3 rounded-lg border border-[#c7c4d8] p-4">
+              <p className="text-xs font-semibold uppercase text-[#464555]">Average Order Value</p>
+              <p className="mt-1 text-xl font-bold text-[#0d1c2e]">{formatCurrency(averageOrderValue)}</p>
+            </div>
+            <div className="mt-4 rounded-lg bg-[#f8f9ff] p-4 text-sm leading-6 text-[#464555]">
+              <p className="mb-1 font-bold text-[#0d1c2e]">{insight.title}</p>
+              <p>{insight.detail}</p>
+              <p className="mt-2 font-semibold text-[#3525cd]">{insight.action}</p>
+            </div>
+          </div>
+        </div>
+          );
+        })()
+      )}
       <div className="flex flex-col gap-4 border-b border-[#c7c4d8] bg-white p-6 lg:flex-row lg:items-center lg:justify-between">
         <h3 className="text-xl font-semibold text-[#0d1c2e]">
           Recent Customer Activity
@@ -314,12 +513,67 @@ function CustomerTable({ customers }) {
               value={query}
             />
           </div>
-          <button className="flex items-center justify-center gap-2 rounded-lg border border-[#c7c4d8] px-4 py-2 text-sm font-semibold text-[#464555] transition hover:bg-[#e6eeff]" type="button">
+          <button
+            className={`flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold transition ${
+              filtersOpen
+                ? "border-[#3525cd] bg-[#3525cd]/5 text-[#3525cd]"
+                : "border-[#c7c4d8] text-[#464555] hover:bg-[#e6eeff]"
+            }`}
+            onClick={() => setFiltersOpen((value) => !value)}
+            type="button"
+          >
             <Filter size={17} />
             Filter
           </button>
         </div>
       </div>
+      {filtersOpen && (
+        <div className="grid grid-cols-1 gap-4 border-b border-[#c7c4d8] bg-[#f8f9ff] px-6 py-4 sm:grid-cols-3">
+          <label className="text-xs font-semibold uppercase tracking-wide text-[#464555]">
+            Country
+            <select
+              className="mt-2 w-full rounded-lg border border-[#c7c4d8] bg-white px-3 py-2 text-sm normal-case text-[#0d1c2e] outline-none"
+              onChange={(event) => {
+                setCountryFilter(event.target.value);
+                setPage(1);
+              }}
+              value={countryFilter}
+            >
+              <option value="all">All Countries</option>
+              {countries.map((country) => (
+                <option key={country} value={country}>{country}</option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs font-semibold uppercase tracking-wide text-[#464555]">
+            Min Orders
+            <input
+              className="mt-2 w-full rounded-lg border border-[#c7c4d8] bg-white px-3 py-2 text-sm normal-case text-[#0d1c2e] outline-none"
+              min="0"
+              onChange={(event) => {
+                setMinOrders(event.target.value);
+                setPage(1);
+              }}
+              placeholder="e.g. 5"
+              type="number"
+              value={minOrders}
+            />
+          </label>
+          <div className="flex items-end">
+            <button
+              className="w-full rounded-lg border border-[#c7c4d8] bg-white px-3 py-2 text-sm font-semibold text-[#464555] hover:bg-[#e6eeff]"
+              onClick={() => {
+                setCountryFilter("all");
+                setMinOrders("");
+                setPage(1);
+              }}
+              type="button"
+            >
+              Reset Filters
+            </button>
+          </div>
+        </div>
+      )}
       <div className="overflow-x-auto">
         <table className="w-full min-w-[760px] text-left">
           <thead className="bg-[#e6eeff]">
@@ -360,7 +614,11 @@ function CustomerTable({ customers }) {
                     {number.format(Number(customer.orders || 0))}
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <button className="rounded p-1 text-[#3525cd] transition hover:bg-[#3525cd]/5" type="button">
+                    <button
+                      className="rounded p-1 text-[#3525cd] transition hover:bg-[#3525cd]/5"
+                      onClick={() => setSelectedCustomer(customer)}
+                      type="button"
+                    >
                       <MoreVertical size={18} />
                     </button>
                   </td>
@@ -375,7 +633,7 @@ function CustomerTable({ customers }) {
           Showing {filtered.length ? number.format(start + 1) : 0}-
           {number.format(Math.min(start + visible.length, filtered.length))} of {number.format(filtered.length)} customers
         </span>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <button
             className="rounded border border-[#c7c4d8] bg-white px-3 py-1 text-sm disabled:opacity-40"
             disabled={currentPage === 1}
@@ -387,6 +645,23 @@ function CustomerTable({ customers }) {
           <span className="min-w-16 text-center text-sm font-bold text-[#3525cd]">
             {currentPage} / {totalPages}
           </span>
+          <form className="flex items-center gap-2" onSubmit={handleJumpToPage}>
+            <input
+              className="h-9 w-16 rounded border border-[#c7c4d8] bg-white px-2 text-center text-sm text-[#0d1c2e] outline-none focus:border-[#3525cd]"
+              min="1"
+              max={totalPages}
+              onChange={(event) => setJumpPage(event.target.value)}
+              placeholder="Page"
+              type="number"
+              value={jumpPage}
+            />
+            <button
+              className="h-9 rounded border border-[#c7c4d8] bg-white px-3 text-sm font-semibold text-[#464555] hover:bg-[#e6eeff]"
+              type="submit"
+            >
+              Go
+            </button>
+          </form>
           <button
             className="rounded border border-[#c7c4d8] bg-white px-3 py-1 text-sm disabled:opacity-40"
             disabled={currentPage === totalPages}

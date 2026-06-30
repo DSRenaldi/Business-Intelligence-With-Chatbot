@@ -1,9 +1,17 @@
+import os
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError
+from threading import Lock
+
+from ai.analytics_tools import execute_structured_plan
 from ai.business_context import build_business_context
 from ai.business_context import context_to_text
-from ai.analytics_tools import execute_structured_plan
 from ai.chatbot import generate_chat_response
 from ai.copilot_context import build_copilot_context
+from ai.llm_planner import build_planner_prompt
+from ai.llm_planner import parse_planner_output
 from ai.intent_parser import parse_structured_intent
+from ai.intent_parser import normalize_llm_plan
 from ai.model_loader import get_runtime_info
 from ai.semantic_analytics import answer_period_analysis
 
@@ -67,6 +75,10 @@ OUT_OF_SCOPE_ANSWER = (
     "orders, produk, customer, country performance, growth, periode penjualan, dan insight bisnis. "
     "Silakan ajukan pertanyaan berdasarkan data dashboard."
 )
+
+QWEN_EXECUTOR = ThreadPoolExecutor(max_workers=1)
+QWEN_LOCK = Lock()
+QWEN_BUSY = False
 
 GREETING_KEYWORDS = [
     "halo",
@@ -287,8 +299,63 @@ def _should_polish(message):
     normalized = message.lower()
     return any(
         keyword in normalized
-        for keyword in ["gunakan qwen", "pakai qwen", "jawab dengan model"]
+        for keyword in ANALYTICAL_KEYWORDS
     )
+
+
+def _try_generate_with_timeout(message, context_text):
+    global QWEN_BUSY
+
+    timeout_seconds = int(os.getenv("QWEN_NARRATOR_TIMEOUT_SECONDS", "20"))
+
+    with QWEN_LOCK:
+        if QWEN_BUSY:
+            return None, "qwen_busy"
+
+        QWEN_BUSY = True
+
+    future = QWEN_EXECUTOR.submit(
+        generate_chat_response,
+        message,
+        context_text,
+    )
+
+    def clear_busy(_future):
+        global QWEN_BUSY
+        with QWEN_LOCK:
+            QWEN_BUSY = False
+
+    future.add_done_callback(clear_busy)
+
+    try:
+        return future.result(timeout=timeout_seconds), "qwen_narrator"
+    except TimeoutError:
+        return None, "qwen_timeout"
+    except Exception:
+        return None, "qwen_error"
+
+
+def _try_llm_plan(message, history):
+    planner_prompt = build_planner_prompt(message, history=history)
+    planner_output, planner_status = _try_generate_with_timeout(
+        "Create the BI intent plan as JSON only.",
+        planner_prompt,
+    )
+
+    if not planner_output:
+        return None, planner_status
+
+    plan = parse_planner_output(planner_output)
+
+    if not plan:
+        return None, "planner_parse_error"
+
+    normalized = normalize_llm_plan(plan)
+
+    if not normalized:
+        return None, "planner_unsupported_plan"
+
+    return normalized, "llm_planner"
 
 
 def run_copilot(message, db, history=None):
@@ -322,6 +389,13 @@ def run_copilot(message, db, history=None):
     if not tool_result:
         tool_result = answer_period_analysis(message, db, history=history)
 
+    if not tool_result:
+        llm_plan, planner_source = _try_llm_plan(message, history)
+        tool_result = execute_structured_plan(db, llm_plan) if llm_plan else None
+
+        if tool_result and planner_source == "llm_planner":
+            tool_result["source"] = f"{tool_result['source']}+llm_planner"
+
     if tool_result:
         tool_result.setdefault("data", {})
     else:
@@ -332,12 +406,24 @@ def run_copilot(message, db, history=None):
         source = tool_result["source"]
     elif tool_result:
         copilot_context = build_copilot_context(message, tool_result)
-        answer = generate_chat_response(message, copilot_context)
-        source = f"{tool_result['source']}+qwen_narrator"
+        qwen_answer, qwen_status = _try_generate_with_timeout(message, copilot_context)
+
+        if qwen_answer:
+            answer = qwen_answer
+            source = f"{tool_result['source']}+{qwen_status}"
+        else:
+            answer = tool_result["answer"]
+            source = f"{tool_result['source']}+{qwen_status}_fallback"
     else:
         business_context_text = context_to_text(context, topic=topic)
-        answer = generate_chat_response(message, business_context_text)
-        source = "qwen_fallback"
+        qwen_answer, qwen_status = _try_generate_with_timeout(message, business_context_text)
+
+        if qwen_answer:
+            answer = qwen_answer
+            source = qwen_status
+        else:
+            answer = "Saya belum bisa menjawab pertanyaan ini secara andal dari data dashboard yang tersedia."
+            source = f"{qwen_status}_fallback"
 
     return {
         "answer": answer,
