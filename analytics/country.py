@@ -14,10 +14,11 @@ from sqlalchemy import func,text
 
 from database.models import Orders
 
-def get_country_revenue(db):
+def get_country_revenue(db, year=None):
+    year_clause = 'WHERE EXTRACT(YEAR FROM o."InvoiceDate") = :year' if year else ""
 
     result = db.execute(
-        text("""
+        text(f"""
         SELECT
             c."Country",
             SUM(o."Total") as revenue
@@ -28,10 +29,13 @@ def get_country_revenue(db):
         ON c."CustomerID" =
            o."CustomerID"
 
+        {year_clause}
+
         GROUP BY c."Country"
 
         ORDER BY revenue DESC
-        """)
+        """),
+        {"year": year}
     )
 
     return [

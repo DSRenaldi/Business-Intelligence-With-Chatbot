@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "../services/api";
 
-function useCountryRevenue() {
+function useCountryRevenue(year = "all") {
 
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -9,7 +9,9 @@ function useCountryRevenue() {
   useEffect(() => {
 
     api
-      .get("/api/countries/revenue")
+      .get("/api/countries/revenue", {
+        params: year === "all" ? {} : { year },
+      })
       .then((res) => {
         setData(res.data);
       })
@@ -18,7 +20,7 @@ function useCountryRevenue() {
         setLoading(false);
       });
 
-  }, []);
+  }, [year]);
 
   return {
     data,

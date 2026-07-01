@@ -12,6 +12,7 @@ if ROOT_DIR not in sys.path:
 
 from fastapi import APIRouter
 from fastapi import Depends
+from fastapi import Query
 
 from sqlalchemy.orm import Session
 
@@ -26,17 +27,30 @@ router = APIRouter()
     "/api/revenue/monthly"
 )
 def monthly_revenue(
+    year: int | None = Query(None, ge=2010, le=2100),
     db: Session = Depends(get_db)
 ):
 
-    return get_monthly_revenue(db)
+    return get_monthly_revenue(db, year=year)
 
 
 @router.get(
     "/api/revenue/growth"
 )
 def growth_rate(
+    year: int | None = Query(None, ge=2010, le=2100),
     db: Session = Depends(get_db)
 ):
 
-    return get_growth_rate(db)
+    return get_growth_rate(db, year=year)
+
+
+@router.get(
+    "/api/orders/monthly"
+)
+def monthly_orders(
+    year: int | None = Query(None, ge=2010, le=2100),
+    db: Session = Depends(get_db)
+):
+
+    return get_monthly_orders(db, year=year)

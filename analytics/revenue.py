@@ -15,26 +15,34 @@ from sqlalchemy import func, text
 from database.models import Orders
 
 
-def get_total_revenue(db):
+def year_filter_clause(year):
+    return 'WHERE EXTRACT(YEAR FROM "InvoiceDate") = :year' if year else ""
 
-    revenue = db.query(
-        func.sum(Orders.Total)
-    ).scalar()
+
+def get_total_revenue(db, year=None):
+    query = db.query(func.sum(Orders.Total))
+
+    if year:
+        query = query.filter(func.extract("year", Orders.InvoiceDate) == year)
+
+    revenue = query.scalar()
 
     return revenue
 
 
-def get_monthly_revenue(db):
+def get_monthly_revenue(db, year=None):
 
     result = db.execute(
-        text("""
+        text(f"""
             SELECT
                 DATE_TRUNC('month', "InvoiceDate") as month,
                 SUM("Total") as revenue
             FROM orders
+            {year_filter_clause(year)}
             GROUP BY month
             ORDER BY month
-        """)
+        """),
+        {"year": year}
     )
 
     return [
@@ -43,9 +51,29 @@ def get_monthly_revenue(db):
     ]
 
 
-def get_growth_rate(db):
+def get_monthly_orders(db, year=None):
+    result = db.execute(
+        text(f"""
+            SELECT
+                DATE_TRUNC('month', "InvoiceDate") as month,
+                COUNT(*) as orders
+            FROM orders
+            {year_filter_clause(year)}
+            GROUP BY month
+            ORDER BY month
+        """),
+        {"year": year}
+    )
 
-    monthly = get_monthly_revenue(db)
+    return [
+        dict(row._mapping)
+        for row in result
+    ]
+
+
+def get_growth_rate(db, year=None):
+
+    monthly = get_monthly_revenue(db, year=year)
 
     growth = []
 

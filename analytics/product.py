@@ -16,9 +16,11 @@ from database.models import Orders
 
 def get_top_products(
     db,
-    limit=10
+    limit=10,
+    year=None
 ):
     limit = int(limit)
+    year_clause = 'WHERE EXTRACT(YEAR FROM o."InvoiceDate") = :year' if year else ""
 
     result = db.execute(
         text(f"""
@@ -36,12 +38,18 @@ def get_top_products(
         JOIN product p
         ON p."StockCode" = d."StockCode"
 
+        JOIN orders o
+        ON o."InvoiceNo" = d."InvoiceNo"
+
+        {year_clause}
+
         GROUP BY p."Description"
 
         ORDER BY revenue DESC
 
         LIMIT {limit}
-        """)
+        """),
+        {"year": year}
     )
 
     return [
@@ -52,9 +60,11 @@ def get_top_products(
 
 def get_worst_products(
     db,
-    limit=10
+    limit=10,
+    year=None
 ):
     limit = int(limit)
+    year_clause = 'WHERE EXTRACT(YEAR FROM o."InvoiceDate") = :year' if year else ""
 
     result = db.execute(
         text(f"""
@@ -72,12 +82,18 @@ def get_worst_products(
         JOIN product p
         ON p."StockCode" = d."StockCode"
 
+        JOIN orders o
+        ON o."InvoiceNo" = d."InvoiceNo"
+
+        {year_clause}
+
         GROUP BY p."Description"
 
         ORDER BY revenue ASC
 
         LIMIT {limit}
-        """)
+        """),
+        {"year": year}
     )
 
     return [

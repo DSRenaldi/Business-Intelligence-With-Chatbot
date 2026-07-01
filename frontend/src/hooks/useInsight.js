@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 import api from "../services/api";
 
-export default function useInsight() {
+export default function useInsight(year = "all") {
   const [insight, setInsight] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     api
-      .get("/api/insight/summary")
+      .get("/api/insight/summary", {
+        params: year === "all" ? {} : { year },
+      })
       .then((res) => {
         setInsight(res.data);
       })
@@ -17,7 +19,7 @@ export default function useInsight() {
       .finally(() => {
         setLoading(false);
       });
-  }, []);
+  }, [year]);
 
   return {
     insight,

@@ -6,22 +6,20 @@ import {
   CalendarCheck,
   CalendarX,
   CircleDollarSign,
+  Info,
   Lightbulb,
   ShoppingCart,
   TrendingDown,
   TrendingUp,
   TriangleAlert,
+  X,
   Zap,
 } from "lucide-react";
 import { useState } from "react";
 import {
   Area,
   AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
   Cell,
-  LabelList,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -31,7 +29,11 @@ import {
 } from "recharts";
 
 import DashboardLayout from "../../layouts/DashboardLayout";
+import RevenueTrendChart from "../../components/charts/RevenueTrendChart";
+import YearFilter from "../../components/filters/YearFilter";
 import useCountryRevenue from "../../hooks/useCountryRevenue";
+import useDashboardYear from "../../hooks/useDashboardYear";
+import useDashboardYears from "../../hooks/useDashboardYears";
 import useInsight from "../../hooks/useInsight";
 import useKPI from "../../hooks/useKPI";
 import useRevenue from "../../hooks/useRevenue";
@@ -77,38 +79,6 @@ function getGrowth(data) {
   return ((current - previous) / previous) * 100;
 }
 
-function getPeriodLabel(data) {
-  if (!data.length) return "No revenue period available";
-
-  const first = data[0];
-  const last = data[data.length - 1];
-
-  return `${formatMonth(first.month)} - ${formatMonth(last.month)}`;
-}
-
-function getQuarterlyRevenue(data) {
-  const quarters = new Map();
-
-  data.forEach((item) => {
-    const date = new Date(item.month);
-    if (Number.isNaN(date.getTime())) return;
-
-    const year = date.getFullYear();
-    const quarter = Math.floor(date.getMonth() / 3) + 1;
-    const key = `${year}-Q${quarter}`;
-    const current = quarters.get(key) || {
-      month: key,
-      monthLabel: `Q${quarter} ${year}`,
-      revenue: 0,
-    };
-
-    current.revenue += Number(item.revenue || 0);
-    quarters.set(key, current);
-  });
-
-  return Array.from(quarters.values());
-}
-
 function MetricCard({ icon: Icon, label, value, detail, tone = "up" }) {
   const TrendIcon = tone === "down" ? ArrowDownRight : ArrowUpRight;
   const trendColor = tone === "down" ? "text-[#ba1a1a]" : "text-emerald-600";
@@ -129,93 +99,6 @@ function MetricCard({ icon: Icon, label, value, detail, tone = "up" }) {
           <TrendIcon size={15} />
           <span>{detail}</span>
         </div>
-      </div>
-    </div>
-  );
-}
-
-function RevenueBars({ data }) {
-  const [view, setView] = useState("monthly");
-  const monthlyData = data.slice(-12);
-  const quarterlyData = getQuarterlyRevenue(data).slice(-8);
-  const chartData = view === "quarterly" ? quarterlyData : monthlyData;
-  const periodLabel = getPeriodLabel(chartData);
-
-  return (
-    <div className="rounded-xl border border-[#c7c4d8] bg-white p-6 shadow-sm xl:col-span-8">
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h4 className="text-xl font-semibold text-[#0d1c2e]">
-            Monthly Revenue Trend
-          </h4>
-          <p className="text-sm text-[#464555]">
-            Gross revenue performance from dataset period: {periodLabel}
-          </p>
-        </div>
-        <div className="flex w-fit items-center gap-1 rounded-lg bg-[#e6eeff] p-1">
-          <button
-            className={`rounded-md px-3 py-1 text-xs font-semibold ${
-              view === "monthly"
-                ? "bg-white text-[#3525cd] shadow-sm"
-                : "text-[#464555]"
-            }`}
-            onClick={() => setView("monthly")}
-            type="button"
-          >
-            Monthly
-          </button>
-          <button
-            className={`rounded-md px-3 py-1 text-xs font-semibold ${
-              view === "quarterly"
-                ? "bg-white text-[#3525cd] shadow-sm"
-                : "text-[#464555]"
-            }`}
-            onClick={() => setView("quarterly")}
-            type="button"
-          >
-            Quarterly
-          </button>
-        </div>
-      </div>
-
-      <div className="h-[320px]">
-        {chartData.length ? (
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 36, right: 12, bottom: 0, left: 0 }}>
-              <CartesianGrid stroke="#c7c4d8" strokeDasharray="3 3" vertical={false} />
-              <XAxis
-                axisLine={false}
-                dataKey="monthLabel"
-                tick={{ fill: "#464555", fontSize: 11, fontWeight: 600 }}
-                tickLine={false}
-              />
-              <YAxis
-                axisLine={false}
-                tick={{ fill: "#464555", fontSize: 11 }}
-                tickFormatter={(value) => formatCurrency(value, true)}
-                tickLine={false}
-                width={64}
-              />
-              <Tooltip
-                cursor={{ fill: "#e6eeff" }}
-                formatter={(value) => formatCurrency(value)}
-                labelFormatter={(label) => `Month: ${label}`}
-              />
-              <Bar dataKey="revenue" fill="#3525cd" radius={[8, 8, 0, 0]}>
-                <LabelList
-                  dataKey="revenue"
-                  formatter={(value) => formatCurrency(value, true)}
-                  position="top"
-                  style={{ fill: "#464555", fontSize: 10, fontWeight: 700 }}
-                />
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        ) : (
-          <div className="flex h-full items-center justify-center rounded-lg bg-[#eff4ff] text-sm font-medium text-[#464555]">
-            Revenue data is not available.
-          </div>
-        )}
       </div>
     </div>
   );
@@ -281,6 +164,7 @@ function Distribution({ countryData }) {
 }
 
 function GrowthChart({ data }) {
+  const [explanationOpen, setExplanationOpen] = useState(false);
   const growthData = data.slice(1).map((item, index) => {
     const previous = data[index]?.revenue || 0;
     const growth = previous ? ((item.revenue - previous) / previous) * 100 : 0;
@@ -290,18 +174,66 @@ function GrowthChart({ data }) {
       growth: Number(growth.toFixed(2)),
     };
   });
+  const isDenseChart = growthData.length > 18;
+  const xAxisInterval = isDenseChart
+    ? Math.max(Math.ceil(growthData.length / 6) - 1, 0)
+    : 0;
 
   return (
     <div className="rounded-xl border border-[#c7c4d8] bg-white p-6 shadow-sm xl:col-span-6">
-      <h4 className="text-xl font-semibold text-[#0d1c2e]">
-        Revenue Growth Rate
-      </h4>
+      {explanationOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0d1c2e]/55 p-4">
+          <div className="w-full max-w-xl rounded-xl bg-white p-6 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <h3 className="text-xl font-bold text-[#0d1c2e]">Revenue Growth Rate</h3>
+              <button
+                className="rounded-lg p-2 text-[#464555] hover:bg-[#dce9ff]"
+                onClick={() => setExplanationOpen(false)}
+                type="button"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="space-y-3 text-sm leading-6 text-[#464555]">
+              <p>
+                Chart ini menunjukkan persentase perubahan revenue dibanding bulan sebelumnya.
+              </p>
+              <p>
+                Nilai positif berarti revenue tumbuh dari bulan sebelumnya, sedangkan nilai negatif
+                menunjukkan penurunan. Metrik ini membantu melihat momentum bisnis, bukan hanya
+                besarnya revenue.
+              </p>
+              <p>
+                Gunakan chart ini untuk menemukan bulan yang mengalami lonjakan atau penurunan tajam,
+                lalu bandingkan dengan revenue trend, order volume, produk utama, dan market utama
+                untuk mencari penyebab bisnisnya.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      <div className="mb-1 flex items-center justify-between gap-4">
+        <h4 className="text-xl font-semibold text-[#0d1c2e]">
+          Revenue Growth Rate
+        </h4>
+        <button
+          className="flex items-center gap-2 rounded-lg border border-[#c7c4d8] px-3 py-2 text-xs font-semibold text-[#464555] transition hover:border-[#3525cd] hover:text-[#3525cd]"
+          onClick={() => setExplanationOpen(true)}
+          type="button"
+        >
+          <Info size={15} />
+          Explain
+        </button>
+      </div>
       <p className="mb-6 text-sm text-[#464555]">
         Month-over-month percentage change
       </p>
       <div className="h-64">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={growthData} margin={{ top: 28, right: 12, bottom: 0, left: 0 }}>
+          <AreaChart
+            data={growthData}
+            margin={{ top: 28, right: 16, bottom: isDenseChart ? 8 : 0, left: 0 }}
+          >
             <defs>
               <linearGradient id="growthGradient" x1="0" x2="0" y1="0" y2="1">
                 <stop offset="5%" stopColor="#3525cd" stopOpacity={0.2} />
@@ -311,6 +243,10 @@ function GrowthChart({ data }) {
             <XAxis
               axisLine={false}
               dataKey="month"
+              height={isDenseChart ? 38 : 30}
+              interval={xAxisInterval}
+              minTickGap={isDenseChart ? 28 : 0}
+              padding={{ left: 24, right: 24 }}
               tick={{ fill: "#464555", fontSize: 10, fontWeight: 600 }}
               tickLine={false}
             />
@@ -326,13 +262,17 @@ function GrowthChart({ data }) {
               dataKey="growth"
               dot={{ fill: "#3525cd", r: 4, stroke: "#ffffff", strokeWidth: 2 }}
               fill="url(#growthGradient)"
-              label={{
-                fill: "#464555",
-                fontSize: 10,
-                fontWeight: 700,
-                formatter: (value) => `${value}%`,
-                position: "top",
-              }}
+              label={
+                isDenseChart
+                  ? false
+                  : {
+                      fill: "#464555",
+                      fontSize: 10,
+                      fontWeight: 700,
+                      formatter: (value) => `${value}%`,
+                      position: "top",
+                    }
+              }
               stroke="#3525cd"
               strokeWidth={3}
               type="monotone"
@@ -398,10 +338,13 @@ function InsightCard({ icon: Icon, title, detail, tone = "primary" }) {
 }
 
 function RevenueAnalytics() {
-  const { kpi, loading: kpiLoading } = useKPI();
-  const { revenueData, loading: revenueLoading } = useRevenue();
-  const { data: countryRevenue, loading: countryLoading } = useCountryRevenue();
-  const { insight } = useInsight();
+  const { selectedYear, setSelectedYear } = useDashboardYear();
+  const years = useDashboardYears();
+  const { kpi, loading: kpiLoading } = useKPI(selectedYear);
+  const { revenueData, loading: revenueLoading } = useRevenue(selectedYear);
+  const { revenueData: allRevenueData, loading: allRevenueLoading } = useRevenue("all");
+  const { data: countryRevenue, loading: countryLoading } = useCountryRevenue(selectedYear);
+  const { insight } = useInsight(selectedYear);
 
   const normalizedRevenue = revenueData
     .map((item) => ({
@@ -412,7 +355,6 @@ function RevenueAnalytics() {
     }))
     .filter((item) => Number.isFinite(item.timestamp))
     .sort((a, b) => a.timestamp - b.timestamp);
-
   const latest = normalizedRevenue.slice(-12);
   const bestMonth = latest.reduce(
     (winner, item) => (item.revenue > winner.revenue ? item : winner),
@@ -426,10 +368,11 @@ function RevenueAnalytics() {
   const averageOrderValue = kpi?.total_orders
     ? Number(kpi.total_revenue || 0) / Number(kpi.total_orders)
     : 0;
-  const isLoading = kpiLoading || revenueLoading || countryLoading;
+  const isLoading = kpiLoading || revenueLoading || allRevenueLoading || countryLoading;
 
   return (
     <DashboardLayout>
+      <YearFilter value={selectedYear} years={years} onChange={setSelectedYear} />
       {isLoading && (
         <div className="mb-4 rounded-xl border border-[#c7c4d8] bg-white px-4 py-3 text-sm font-medium text-[#464555]">
           Loading revenue analytics from backend...
@@ -466,7 +409,12 @@ function RevenueAnalytics() {
       </section>
 
       <section className="mt-6 grid grid-cols-12 gap-5">
-        <RevenueBars data={latest} />
+        <RevenueTrendChart
+          allRevenueData={allRevenueData}
+          className="xl:col-span-8"
+          height={320}
+          revenueData={revenueData}
+        />
         <Distribution countryData={countryRevenue} />
         <GrowthChart data={normalizedRevenue} />
         <CountryBars data={countryRevenue} />

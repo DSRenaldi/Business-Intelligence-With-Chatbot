@@ -1,6 +1,58 @@
-.venv
-node_modules/
-models/
+# Python
+.venv/
+venv/
+env/
 __pycache__/
-*.pyc
-# agents.md 
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# JavaScript / React
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+.vite/
+frontend/.vite/
+
+# Environment and local config
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+frontend/vite-dev.log
+frontend/vite-dev.err.log
+
+# Local AI models and generated artifacts
+models/
+*.safetensors
+*.gguf
+*.bin
+*.pt
+*.pth
+*.onnx
+*.ckpt
+training/output/
+training/outputs/
+training/checkpoints/
+
+# Notebook checkpoints
+.ipynb_checkpoints/
+**/.ipynb_checkpoints/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Project local agent config
+.agents/

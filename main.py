@@ -21,6 +21,7 @@ from api.country import router as country_router
 from api.insight import (router as insight_router)
 from api.assistant import router as assistant_router
 from api.report import router as report_router
+from api.metadata import router as metadata_router
 
 app = FastAPI(
     title="Nexus BI API"
@@ -73,4 +74,8 @@ app.include_router(
 
 app.include_router(
     report_router
+)
+
+app.include_router(
+    metadata_router
 )

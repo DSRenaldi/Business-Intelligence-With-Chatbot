@@ -28,10 +28,11 @@ router = APIRouter()
 )
 def top_products(
     limit: int = Query(10, ge=1, le=10000),
+    year: int | None = Query(None, ge=2010, le=2100),
     db: Session = Depends(get_db)
 ):
 
-    return get_top_products(db, limit=limit)
+    return get_top_products(db, limit=limit, year=year)
 
 
 @router.get(
@@ -39,7 +40,8 @@ def top_products(
 )
 def worst_products(
     limit: int = Query(10, ge=1, le=10000),
+    year: int | None = Query(None, ge=2010, le=2100),
     db: Session = Depends(get_db)
 ):
 
-    return get_worst_products(db, limit=limit)
+    return get_worst_products(db, limit=limit, year=year)

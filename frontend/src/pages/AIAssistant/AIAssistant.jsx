@@ -18,16 +18,9 @@ import api from "../../services/api";
 const initialMessages = [
   {
     id: 1,
-    role: "user",
-    content:
-      "Hey, I noticed a significant drop in our performance this month. Can you analyze why our revenue changed compared to last month?",
-  },
-  {
-    id: 2,
     role: "assistant",
     content:
-      "Saya bisa membantu analisis perubahan revenue, top products, top countries, dan customer bernilai tinggi berdasarkan data BI yang tersedia.",
-    topic: "root_cause",
+      "Halo, saya AI Business Assistant untuk Nexus BI. Saya dapat membantu menganalisis KPI, revenue trend, performa produk, kontribusi country, customer value, serta menjelaskan insight bisnis berdasarkan data dashboard yang tersedia.",
   },
 ];
 
@@ -156,7 +149,7 @@ function AIAssistant() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const chatEndRef = useRef(null);
-  const nextIdRef = useRef(3);
+  const nextIdRef = useRef(2);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });

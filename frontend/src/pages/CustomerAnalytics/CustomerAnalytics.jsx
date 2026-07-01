@@ -1,5 +1,4 @@
 import {
-  Download,
   Filter,
   Info,
   MoreVertical,
@@ -28,8 +27,11 @@ import {
 import { useEffect, useMemo, useState } from "react";
 
 import DashboardLayout from "../../layouts/DashboardLayout";
+import YearFilter from "../../components/filters/YearFilter";
 import api from "../../services/api";
 import useCountryRevenue from "../../hooks/useCountryRevenue";
+import useDashboardYear from "../../hooks/useDashboardYear";
+import useDashboardYears from "../../hooks/useDashboardYears";
 import useKPI from "../../hooks/useKPI";
 
 const currency = new Intl.NumberFormat("en-US", {
@@ -53,21 +55,51 @@ function formatCurrency(value, compact = false) {
   return compact ? compactCurrency.format(numeric) : currency.format(numeric);
 }
 
-function useTopCustomers(limit = 5000) {
+function useTopCustomers(limit = 5000, year = "all") {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     api
       .get("/api/customers/top", {
-        params: { limit },
+        params: year === "all" ? { limit } : { limit, year },
       })
       .then((res) => setCustomers(res.data))
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [limit]);
+  }, [limit, year]);
 
   return { customers, loading };
+}
+
+function useCustomerActivity({ country, minOrders, page, pageSize, query, year }) {
+  const [data, setData] = useState({
+    items: [],
+    page: 1,
+    page_size: pageSize,
+    total: 0,
+    total_pages: 1,
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api
+      .get("/api/customers/activity", {
+        params: {
+          ...(year === "all" ? {} : { year }),
+          ...(query ? { search: query } : {}),
+          ...(country === "all" ? {} : { country }),
+          ...(minOrders ? { min_orders: minOrders } : {}),
+          page,
+          page_size: pageSize,
+        },
+      })
+      .then((res) => setData(res.data))
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [country, minOrders, page, pageSize, query, year]);
+
+  return { data, loading };
 }
 
 function MetricCard({ icon: Icon, label, value, detail, tone = "up" }) {
@@ -191,23 +223,64 @@ function TopCustomersBars({ customers, totalRevenue }) {
   );
 }
 
-function RevenueDistribution({ customers, totalRevenue }) {
-  const sorted = customers.map((item) => Number(item.revenue || 0));
-  const top20Count = Math.ceil(sorted.length * 0.2);
-  const topRevenue = sorted.slice(0, top20Count).reduce((sum, value) => sum + value, 0);
-  const middleRevenue = sorted.slice(top20Count, top20Count * 2).reduce((sum, value) => sum + value, 0);
-  const remainingRevenue = Math.max(totalRevenue - topRevenue - middleRevenue, 0);
+function RepeatRevenueDistribution({ customers, totalRevenue }) {
+  const [explanationOpen, setExplanationOpen] = useState(false);
+  const oneTimeRevenue = customers
+    .filter((customer) => Number(customer.orders || 0) <= 1)
+    .reduce((sum, customer) => sum + Number(customer.revenue || 0), 0);
+  const repeatRevenue = customers
+    .filter((customer) => Number(customer.orders || 0) > 1)
+    .reduce((sum, customer) => sum + Number(customer.revenue || 0), 0);
   const data = [
-    { name: "Enterprise", revenue: topRevenue },
-    { name: "SME", revenue: middleRevenue },
-    { name: "Startup", revenue: remainingRevenue },
+    { name: "Repeat Customers", revenue: repeatRevenue },
+    { name: "One-time Customers", revenue: oneTimeRevenue },
   ];
+  const repeatShare = totalRevenue ? (repeatRevenue / totalRevenue) * 100 : 0;
+  const oneTimeShare = totalRevenue ? (oneTimeRevenue / totalRevenue) * 100 : 0;
 
   return (
     <div className="flex flex-col rounded-xl border border-[#c7c4d8] bg-white p-6 shadow-sm lg:col-span-5">
-      <h3 className="mb-6 text-xl font-semibold text-[#0d1c2e]">
-        Revenue Distribution
-      </h3>
+      {explanationOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0d1c2e]/55 p-4">
+          <div className="w-full max-w-xl rounded-xl bg-white p-6 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <h3 className="text-xl font-bold text-[#0d1c2e]">Repeat vs One-time Revenue</h3>
+              <button className="rounded-lg p-2 text-[#464555] hover:bg-[#dce9ff]" onClick={() => setExplanationOpen(false)} type="button">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="space-y-3 text-sm leading-6 text-[#464555]">
+              <p>
+                Chart ini membandingkan revenue dari customer yang hanya order satu kali dengan
+                customer yang sudah melakukan repeat order.
+              </p>
+              <p>
+                Repeat customers saat ini menyumbang <span className="font-bold text-[#3525cd]">{repeatShare.toFixed(1)}%</span>{" "}
+                revenue, sedangkan one-time customers menyumbang{" "}
+                <span className="font-bold text-[#3525cd]">{oneTimeShare.toFixed(1)}%</span>.
+              </p>
+              <p>
+                Secara bisnis, porsi repeat revenue yang tinggi menandakan retention lebih kuat.
+                Jika porsi one-time revenue besar, perusahaan perlu fokus pada reactivation,
+                follow-up campaign, atau loyalty program untuk mendorong pembelian berikutnya.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      <div className="mb-6 flex items-center justify-between gap-4">
+        <h3 className="text-xl font-semibold text-[#0d1c2e]">
+          Repeat vs One-time Revenue
+        </h3>
+        <button
+          className="flex items-center gap-2 rounded-lg border border-[#c7c4d8] px-3 py-2 text-xs font-semibold text-[#464555] transition hover:border-[#3525cd] hover:text-[#3525cd]"
+          onClick={() => setExplanationOpen(true)}
+          type="button"
+        >
+          <Info size={15} />
+          Explain
+        </button>
+      </div>
       <div className="relative mx-auto h-52 w-full max-w-[230px]">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
@@ -354,8 +427,27 @@ function PurchaseFrequency({ customers }) {
               tickLine={false}
             />
             <YAxis hide />
-            <Tooltip formatter={(value) => `${number.format(value)} customers`} />
-            <Bar dataKey="count" fill="#dae2fd" radius={[5, 5, 0, 0]}>
+            <Tooltip
+              content={({ active, payload, label }) => {
+                if (!active || !payload?.length) {
+                  return null;
+                }
+
+                const count = Number(payload[0].value || 0);
+
+                return (
+                  <div className="rounded-lg border border-[#c7c4d8] bg-white px-3 py-2 shadow-lg">
+                    <p className="text-xs font-semibold text-[#464555]">
+                      {label} orders
+                    </p>
+                    <p className="text-sm font-semibold text-[#3525cd]">
+                      Count: {number.format(count)} customers
+                    </p>
+                  </div>
+                );
+              }}
+            />
+            <Bar dataKey="count" fill="#3525cd" radius={[5, 5, 0, 0]}>
               <LabelList
                 dataKey="count"
                 formatter={(value) => number.format(value)}
@@ -363,15 +455,11 @@ function PurchaseFrequency({ customers }) {
                 style={{ fill: "#464555", fontSize: 10, fontWeight: 700 }}
               />
               {buckets.map((bucket) => (
-                <Cell fill={bucket.label === "5" ? "#3525cd" : "#dae2fd"} key={bucket.label} />
+                <Cell fill="#3525cd" key={bucket.label} />
               ))}
             </Bar>
           </BarChart>
         </ResponsiveContainer>
-      </div>
-      <div className="mt-3 flex items-center justify-between text-xs font-medium text-[#464555]">
-        <span>Order frequency per customer</span>
-        <span>Customer count</span>
       </div>
     </div>
   );
@@ -416,7 +504,7 @@ function getCustomerActionInsight(customer) {
   };
 }
 
-function CustomerTable({ customers }) {
+function CustomerTable({ countries, year }) {
   const [query, setQuery] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [countryFilter, setCountryFilter] = useState("all");
@@ -425,19 +513,19 @@ function CustomerTable({ customers }) {
   const [page, setPage] = useState(1);
   const [jumpPage, setJumpPage] = useState("");
   const pageSize = 10;
-  const countries = Array.from(new Set(customers.map((customer) => customer.Country).filter(Boolean))).sort();
-  const filtered = customers.filter((customer) => {
-    const searchable = `${customer.CustomerID} ${customer.Country}`.toLowerCase();
-    const matchesSearch = searchable.includes(query.toLowerCase());
-    const matchesCountry = countryFilter === "all" || customer.Country === countryFilter;
-    const matchesOrders = !minOrders || Number(customer.orders || 0) >= Number(minOrders);
-
-    return matchesSearch && matchesCountry && matchesOrders;
+  const { data, loading } = useCustomerActivity({
+    country: countryFilter,
+    minOrders,
+    page,
+    pageSize,
+    query,
+    year,
   });
-  const totalPages = Math.max(Math.ceil(filtered.length / pageSize), 1);
+  const visible = data.items || [];
+  const totalRows = Number(data.total || 0);
+  const totalPages = Math.max(Number(data.total_pages || 1), 1);
   const currentPage = Math.min(page, totalPages);
   const start = (currentPage - 1) * pageSize;
-  const visible = filtered.slice(start, start + pageSize);
 
   function handleSearch(event) {
     setQuery(event.target.value);
@@ -586,7 +674,21 @@ function CustomerTable({ customers }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-[#c7c4d8]">
-            {visible.map((customer) => {
+            {loading && (
+              <tr>
+                <td className="px-6 py-8 text-center text-sm font-medium text-[#464555]" colSpan={5}>
+                  Loading customer activity...
+                </td>
+              </tr>
+            )}
+            {!loading && !visible.length && (
+              <tr>
+                <td className="px-6 py-8 text-center text-sm font-medium text-[#464555]" colSpan={5}>
+                  No customers match the selected filters.
+                </td>
+              </tr>
+            )}
+            {!loading && visible.map((customer) => {
               const initials = String(customer.CustomerID || "NA").slice(0, 2).toUpperCase();
 
               return (
@@ -630,8 +732,8 @@ function CustomerTable({ customers }) {
       </div>
       <div className="flex items-center justify-between border-t border-[#c7c4d8] bg-[#f8f9ff] px-6 py-4">
         <span className="text-sm text-[#464555]">
-          Showing {filtered.length ? number.format(start + 1) : 0}-
-          {number.format(Math.min(start + visible.length, filtered.length))} of {number.format(filtered.length)} customers
+          Showing {totalRows ? number.format(start + 1) : 0}-
+          {number.format(Math.min(start + visible.length, totalRows))} of {number.format(totalRows)} customers
         </span>
         <div className="flex flex-wrap items-center justify-end gap-2">
           <button
@@ -677,9 +779,11 @@ function CustomerTable({ customers }) {
 }
 
 function CustomerAnalytics() {
-  const { kpi, loading: kpiLoading } = useKPI();
-  const { customers, loading: customersLoading } = useTopCustomers(5000);
-  const { data: countryRevenue, loading: countryLoading } = useCountryRevenue();
+  const { selectedYear, setSelectedYear } = useDashboardYear();
+  const years = useDashboardYears();
+  const { kpi, loading: kpiLoading } = useKPI(selectedYear);
+  const { customers, loading: customersLoading } = useTopCustomers(5000, selectedYear);
+  const { data: countryRevenue, loading: countryLoading } = useCountryRevenue(selectedYear);
 
   const totalRevenue = Number(kpi?.total_revenue || 0);
   const totalCustomers = Number(kpi?.total_customers || 0);
@@ -692,10 +796,15 @@ function CustomerAnalytics() {
     () => customers.filter((customer) => Number(customer.orders || 0) > 5).length,
     [customers]
   );
+  const customerCountries = useMemo(
+    () => Array.from(new Set(countryRevenue.map((item) => item.Country).filter(Boolean))).sort(),
+    [countryRevenue]
+  );
   const isLoading = kpiLoading || customersLoading || countryLoading;
 
   return (
     <DashboardLayout>
+      <YearFilter value={selectedYear} years={years} onChange={setSelectedYear} />
       {isLoading && (
         <div className="mb-4 rounded-xl border border-[#c7c4d8] bg-white px-4 py-3 text-sm font-medium text-[#464555]">
           Loading customer analytics from backend...
@@ -750,15 +859,12 @@ function CustomerAnalytics() {
 
       <section className="mt-6 grid grid-cols-12 gap-5">
         <TopCustomersBars customers={customers} totalRevenue={totalRevenue} />
-        <RevenueDistribution customers={customers} totalRevenue={totalRevenue} />
+        <RepeatRevenueDistribution customers={customers} totalRevenue={totalRevenue} />
         <CountryRevenueBars countryRevenue={countryRevenue} />
         <PurchaseFrequency customers={customers} />
-        <CustomerTable customers={customers} />
+        <CustomerTable countries={customerCountries} key={selectedYear} year={selectedYear} />
       </section>
 
-      <button className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[#3525cd] text-white shadow-2xl transition hover:scale-105 active:scale-95" type="button" aria-label="New analysis">
-        <Download size={21} />
-      </button>
     </DashboardLayout>
   );
 }

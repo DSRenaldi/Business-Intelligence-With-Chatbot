@@ -12,6 +12,7 @@ if ROOT_DIR not in sys.path:
 
 from fastapi import APIRouter
 from fastapi import Depends
+from fastapi import Query
 from sqlalchemy.orm import Session
 
 from database.database import get_db
@@ -26,6 +27,7 @@ router = APIRouter()
     "/api/insight/summary"
 )
 def summary(
+    year: int | None = Query(None, ge=2010, le=2100),
     db: Session = Depends(get_db)
 ):
-    return generate_insight(db)
+    return generate_insight(db, year=year)

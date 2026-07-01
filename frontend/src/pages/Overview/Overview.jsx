@@ -1,6 +1,7 @@
 import {
   ArrowRight,
   Bot,
+  Info,
   X,
   Package,
   ShoppingCart,
@@ -28,9 +29,14 @@ import { useState } from "react";
 import DashboardLayout from "../../layouts/DashboardLayout";
 import api from "../../services/api";
 
+import RevenueTrendChart from "../../components/charts/RevenueTrendChart";
+import YearFilter from "../../components/filters/YearFilter";
 import useCountryRevenue from "../../hooks/useCountryRevenue";
+import useDashboardYear from "../../hooks/useDashboardYear";
+import useDashboardYears from "../../hooks/useDashboardYears";
 import useInsight from "../../hooks/useInsight";
 import useKPI from "../../hooks/useKPI";
+import useMonthlyOrders from "../../hooks/useMonthlyOrders";
 import useRevenue from "../../hooks/useRevenue";
 import useTopProducts from "../../hooks/useTopProducts";
 
@@ -80,29 +86,6 @@ function getGrowth(data) {
 
   if (!previous) return 0;
   return ((current - previous) / previous) * 100;
-}
-
-function getQuarterlyRevenue(data) {
-  const quarters = new Map();
-
-  data.forEach((item) => {
-    const date = new Date(item.month);
-    if (Number.isNaN(date.getTime())) return;
-
-    const year = date.getFullYear();
-    const quarter = Math.floor(date.getMonth() / 3) + 1;
-    const key = `${year}-Q${quarter}`;
-    const current = quarters.get(key) || {
-      month: key,
-      monthLabel: `Q${quarter} ${year}`,
-      revenue: 0,
-    };
-
-    current.revenue += Number(item.revenue || 0);
-    quarters.set(key, current);
-  });
-
-  return Array.from(quarters.values());
 }
 
 function KPITile({ icon: Icon, label, value, accent, trend = "Live" }) {
@@ -242,41 +225,132 @@ function TopProducts({ products }) {
 }
 
 function OrdersTrend({ data }) {
-  const latest = data.slice(-12);
-  const maxRevenue = Math.max(...latest.map((item) => Number(item.revenue || 0)), 1);
+  const [explanationOpen, setExplanationOpen] = useState(false);
+  const chartData = data.map((item) => ({
+    ...item,
+    monthLabel: formatMonth(item.month),
+    orders: Number(item.orders || 0),
+  }));
+  const isDenseChart = chartData.length > 18;
+  const xAxisInterval = isDenseChart
+    ? Math.max(Math.ceil(chartData.length / 10) - 1, 0)
+    : 0;
+  const totalOrders = chartData.reduce((sum, item) => sum + Number(item.orders || 0), 0);
+  const averageOrders = chartData.length ? totalOrders / chartData.length : 0;
+  const bestMonth = chartData.reduce(
+    (best, item) => (Number(item.orders || 0) > Number(best?.orders || 0) ? item : best),
+    chartData[0]
+  );
+  const weakestMonth = chartData.reduce(
+    (weakest, item) =>
+      Number(item.orders || 0) < Number(weakest?.orders || Infinity) ? item : weakest,
+    chartData[0]
+  );
+  const previousOrders = Number(chartData[chartData.length - 2]?.orders || 0);
+  const currentOrders = Number(chartData[chartData.length - 1]?.orders || 0);
+  const pulseGrowth = previousOrders
+    ? ((currentOrders - previousOrders) / previousOrders) * 100
+    : 0;
 
   return (
     <div className="rounded-xl border border-[#c7c4d8] bg-white p-6 shadow-sm lg:col-span-2">
-      <h3 className="mb-5 text-xl font-semibold text-[#0d1c2e]">
-        Revenue Pulse
-      </h3>
-      <div className="flex h-44 items-end gap-2">
-        {latest.map((item, index) => {
-          const height = Math.max((Number(item.revenue || 0) / maxRevenue) * 100, 10);
-
-          return (
-            <div className="flex h-full flex-1 flex-col justify-end gap-1" key={`${item.month}-${index}`}>
-              <span className="truncate text-center text-[10px] font-semibold text-[#464555]">
-                {formatCurrency(item.revenue, true)}
-              </span>
-              <div
-                className="w-full rounded-t bg-[#3525cd] transition hover:opacity-85"
-                style={{ height: `${height}%` }}
-                title={`${formatMonth(item.month)}: ${formatCurrency(item.revenue)}`}
-              />
+      {explanationOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0d1c2e]/55 p-4">
+          <div className="w-full max-w-xl rounded-xl bg-white p-6 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-xl font-bold text-[#0d1c2e]">Order Volume Trend</h3>
+                <p className="text-sm text-[#464555]">
+                  Ringkasan aktivitas order pada periode terpilih.
+                </p>
+              </div>
+              <button className="rounded-lg p-2 text-[#464555] hover:bg-[#dce9ff]" onClick={() => setExplanationOpen(false)} type="button">
+                <X size={20} />
+              </button>
             </div>
-          );
-        })}
+            <div className="space-y-3 text-sm leading-6 text-[#464555]">
+              <p>
+                Chart ini memperlihatkan pola naik-turun jumlah order bulanan agar manajemen
+                bisa membedakan apakah perubahan revenue didorong oleh volume transaksi atau nilai transaksi.
+              </p>
+              <p>
+                Garis menunjukkan jumlah order per bulan. Bulan dengan order terbanyak adalah{" "}
+                <span className="font-bold text-[#3525cd]">{formatMonth(bestMonth?.month)}</span>{" "}
+                dengan {numberFormatter.format(Number(bestMonth?.orders || 0))} orders, sedangkan bulan terendah adalah{" "}
+                <span className="font-bold text-[#3525cd]">{formatMonth(weakestMonth?.month)}</span>{" "}
+                dengan {numberFormatter.format(Number(weakestMonth?.orders || 0))} orders.
+              </p>
+              <p>
+                Rata-rata order bulanan pada periode ini adalah{" "}
+                <span className="font-bold text-[#3525cd]">{numberFormatter.format(Math.round(averageOrders))}</span>.
+                Perubahan bulan terakhir terhadap bulan sebelumnya adalah{" "}
+                <span className="font-bold text-[#3525cd]">{pulseGrowth.toFixed(1)}%</span>.
+              </p>
+              <p>
+                Secara bisnis, gunakan chart ini bersama Revenue Trend untuk melihat apakah revenue naik
+                karena order bertambah, atau karena average order value meningkat.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      <div className="mb-5 flex items-center justify-between gap-4">
+        <h3 className="text-xl font-semibold text-[#0d1c2e]">
+          Order Volume Trend
+        </h3>
+        <button
+          className="flex items-center gap-2 rounded-lg border border-[#c7c4d8] px-3 py-2 text-xs font-semibold text-[#464555] transition hover:border-[#3525cd] hover:text-[#3525cd]"
+          onClick={() => setExplanationOpen(true)}
+          type="button"
+        >
+          <Info size={15} />
+          Explain
+        </button>
       </div>
-      <div className="mt-3 flex justify-between gap-2">
-        {latest.map((item, index) => (
-          <span
-            className="w-full truncate text-center text-[10px] font-semibold uppercase text-[#464555]"
-            key={`${item.month}-label-${index}`}
-          >
-            {formatMonth(item.month)}
-          </span>
-        ))}
+      <div className="h-44">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={chartData} margin={{ top: 28, right: 8, bottom: 0, left: 8 }}>
+            <defs>
+              <linearGradient id="ordersGradient" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="5%" stopColor="#3525cd" stopOpacity={0.22} />
+                <stop offset="95%" stopColor="#3525cd" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <XAxis
+              axisLine={false}
+              dataKey="monthLabel"
+              interval={xAxisInterval}
+              minTickGap={isDenseChart ? 18 : 0}
+              padding={{ left: 20, right: 20 }}
+              tick={{ fill: "#464555", fontSize: 10, fontWeight: 600 }}
+              tickLine={false}
+            />
+            <YAxis hide domain={["dataMin", "dataMax"]} />
+            <Tooltip
+              formatter={(value) => `${numberFormatter.format(Number(value || 0))} orders`}
+            />
+            <Area
+              activeDot={{ fill: "#3525cd", r: 5, stroke: "#ffffff", strokeWidth: 2 }}
+              dataKey="orders"
+              dot={{ fill: "#3525cd", r: 4, stroke: "#ffffff", strokeWidth: 2 }}
+              fill="url(#ordersGradient)"
+              label={
+                isDenseChart
+                  ? false
+                  : {
+                      fill: "#464555",
+                      fontSize: 10,
+                      fontWeight: 700,
+                      formatter: (value) => numberFormatter.format(Number(value || 0)),
+                      position: "top",
+                    }
+              }
+              stroke="#3525cd"
+              strokeWidth={3}
+              type="monotone"
+            />
+          </AreaChart>
+        </ResponsiveContainer>
       </div>
     </div>
   );
@@ -384,31 +458,26 @@ function InsightPanel({ insight, growth, onGenerateReport, reportLoading }) {
 }
 
 function Overview() {
+  const { selectedYear, setSelectedYear } = useDashboardYear();
   const [report, setReport] = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
-  const [revenueView, setRevenueView] = useState("monthly");
-  const { kpi, loading: kpiLoading } = useKPI();
-  const { revenueData, loading: revenueLoading } = useRevenue();
-  const { products, loading: productsLoading } = useTopProducts();
-  const { data: countryRevenue, loading: countryLoading } = useCountryRevenue();
-  const { insight } = useInsight();
+  const years = useDashboardYears();
+  const { kpi, loading: kpiLoading } = useKPI(selectedYear);
+  const { revenueData, loading: revenueLoading } = useRevenue(selectedYear);
+  const { revenueData: allRevenueData, loading: allRevenueLoading } = useRevenue("all");
+  const { ordersData, loading: ordersLoading } = useMonthlyOrders(selectedYear);
+  const { products, loading: productsLoading } = useTopProducts(10, selectedYear);
+  const { data: countryRevenue, loading: countryLoading } = useCountryRevenue(selectedYear);
+  const { insight } = useInsight(selectedYear);
 
   const isLoading =
-    kpiLoading || revenueLoading || productsLoading || countryLoading;
+    kpiLoading || revenueLoading || allRevenueLoading || ordersLoading || productsLoading || countryLoading;
 
   const normalizedRevenue = revenueData.map((item) => ({
     ...item,
     monthLabel: formatMonth(item.month),
     revenue: Number(item.revenue || 0),
   }));
-
-  const yearlyRevenue = normalizedRevenue.filter((item) => {
-    const date = new Date(item.month);
-    return !Number.isNaN(date.getTime()) && date.getFullYear() === 2011;
-  });
-  const quarterlyRevenue = getQuarterlyRevenue(normalizedRevenue).slice(-8);
-  const revenueChartData =
-    revenueView === "quarterly" ? quarterlyRevenue : yearlyRevenue;
   const growth = getGrowth(normalizedRevenue);
 
   async function generateReport() {
@@ -427,6 +496,7 @@ function Overview() {
   return (
     <DashboardLayout>
       {report && <ReportModal onClose={() => setReport(null)} report={report} />}
+      <YearFilter value={selectedYear} years={years} onChange={setSelectedYear} />
       {isLoading && (
         <div className="mb-4 rounded-xl border border-[#c7c4d8] bg-white px-4 py-3 text-sm font-medium text-[#464555]">
           Loading dashboard data from backend...
@@ -472,82 +542,18 @@ function Overview() {
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-5 xl:grid-cols-3">
-        <div className="rounded-xl border border-[#c7c4d8] bg-white p-6 shadow-sm xl:col-span-2">
-          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <h3 className="text-xl font-semibold text-[#0d1c2e]">
-              Monthly Revenue Trend
-            </h3>
-            <div className="flex gap-2">
-              <button
-                className={`rounded-md px-3 py-1 text-xs font-semibold ${
-                  revenueView === "monthly"
-                    ? "bg-[#3525cd] text-white"
-                    : "bg-[#dce9ff] text-[#464555]"
-                }`}
-                onClick={() => setRevenueView("monthly")}
-                type="button"
-              >
-                Monthly
-              </button>
-              <button
-                className={`rounded-md px-3 py-1 text-xs font-semibold ${
-                  revenueView === "quarterly"
-                    ? "bg-[#3525cd] text-white"
-                    : "bg-[#dce9ff] text-[#464555]"
-                }`}
-                onClick={() => setRevenueView("quarterly")}
-                type="button"
-              >
-                Quarterly
-              </button>
-            </div>
-          </div>
-          <div className="h-[280px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={revenueChartData} margin={{ top: 28, right: 8, bottom: 0, left: 8 }}>
-                <defs>
-                  <linearGradient id="revenueGradient" x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="5%" stopColor="#3525cd" stopOpacity={0.22} />
-                    <stop offset="95%" stopColor="#3525cd" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <XAxis
-                  axisLine={false}
-                  dataKey="monthLabel"
-                  interval={0}
-                  minTickGap={0}
-                  padding={{ left: 28, right: 28 }}
-                  tickLine={false}
-                  tick={{ fill: "#464555", fontSize: 11, fontWeight: 600 }}
-                />
-                <YAxis hide domain={["dataMin", "dataMax"]} />
-                <Tooltip formatter={(value) => formatCurrency(value)} />
-                <Area
-                  activeDot={{ fill: "#3525cd", r: 5, stroke: "#ffffff", strokeWidth: 2 }}
-                  dataKey="revenue"
-                  dot={{ fill: "#3525cd", r: 4, stroke: "#ffffff", strokeWidth: 2 }}
-                  fill="url(#revenueGradient)"
-                  label={{
-                    fill: "#464555",
-                    fontSize: 10,
-                    fontWeight: 700,
-                    formatter: (value) => formatCurrency(value, true),
-                    position: "top",
-                  }}
-                  stroke="#3525cd"
-                  strokeWidth={3}
-                  type="monotone"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+        <RevenueTrendChart
+          allRevenueData={allRevenueData}
+          className="xl:col-span-2"
+          height={280}
+          revenueData={revenueData}
+        />
 
         <CountryDonut data={countryRevenue} />
 
         <TopProducts products={products} />
 
-        <OrdersTrend data={normalizedRevenue} />
+        <OrdersTrend data={ordersData} />
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-5 xl:grid-cols-3">

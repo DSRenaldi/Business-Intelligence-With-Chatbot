@@ -22,8 +22,13 @@ import {
 import { useEffect, useMemo, useState } from "react";
 
 import DashboardLayout from "../../layouts/DashboardLayout";
+import RevenueTrendChart from "../../components/charts/RevenueTrendChart";
+import YearFilter from "../../components/filters/YearFilter";
 import api from "../../services/api";
+import useDashboardYear from "../../hooks/useDashboardYear";
+import useDashboardYears from "../../hooks/useDashboardYears";
 import useKPI from "../../hooks/useKPI";
+import useRevenue from "../../hooks/useRevenue";
 import useTopProducts from "../../hooks/useTopProducts";
 
 const currency = new Intl.NumberFormat("en-US", {
@@ -53,17 +58,19 @@ function getStatus(index, contribution) {
   return "Stable";
 }
 
-function useWorstProducts() {
+function useWorstProducts(year = "all") {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     api
-      .get("/api/products/worst")
+      .get("/api/products/worst", {
+        params: year === "all" ? {} : { year },
+      })
       .then((res) => setProducts(res.data))
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, []);
+  }, [year]);
 
   return { products, loading };
 }
@@ -148,6 +155,7 @@ function TopProductsBars({ products, totalRevenue }) {
 }
 
 function ContributionDonut({ topProducts, totalRevenue }) {
+  const [explanationOpen, setExplanationOpen] = useState(false);
   const topRevenue = topProducts.reduce((sum, item) => sum + Number(item.revenue || 0), 0);
   const topShare = totalRevenue ? (topRevenue / totalRevenue) * 100 : 0;
   const standardShare = Math.max(100 - topShare, 0) * 0.65;
@@ -160,9 +168,51 @@ function ContributionDonut({ topProducts, totalRevenue }) {
 
   return (
     <div className="rounded-xl border border-[#c7c4d8] bg-white p-6 shadow-sm lg:col-span-4">
-      <h3 className="mb-6 text-xl font-semibold text-[#0d1c2e]">
-        Product Contribution
-      </h3>
+      {explanationOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0d1c2e]/55 p-4">
+          <div className="w-full max-w-xl rounded-xl bg-white p-6 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <h3 className="text-xl font-bold text-[#0d1c2e]">Product Contribution</h3>
+              <button
+                className="rounded-lg p-2 text-[#464555] hover:bg-[#dce9ff]"
+                onClick={() => setExplanationOpen(false)}
+                type="button"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="space-y-3 text-sm leading-6 text-[#464555]">
+              <p>
+                Chart ini menunjukkan seberapa besar kontribusi revenue dari Top 10 produk
+                dibandingkan total revenue produk.
+              </p>
+              <p>
+                Jika persentase Top 10 terlalu tinggi, bisnis sangat bergantung pada sedikit produk.
+                Ini bisa menjadi kekuatan jika produk tersebut stabil, tetapi juga risiko jika demand
+                atau stok produk utama terganggu.
+              </p>
+              <p>
+                Gunakan chart ini untuk mengevaluasi konsentrasi revenue, menentukan prioritas stok,
+                dan melihat apakah produk standard atau long tail perlu dikembangkan agar revenue
+                lebih sehat dan tidak terlalu terkonsentrasi.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      <div className="mb-6 flex items-center justify-between gap-4">
+        <h3 className="text-xl font-semibold text-[#0d1c2e]">
+          Product Contribution
+        </h3>
+        <button
+          className="flex items-center gap-2 rounded-lg border border-[#c7c4d8] px-3 py-2 text-xs font-semibold text-[#464555] transition hover:border-[#3525cd] hover:text-[#3525cd]"
+          onClick={() => setExplanationOpen(true)}
+          type="button"
+        >
+          <Info size={15} />
+          Explain
+        </button>
+      </div>
       <div className="relative mx-auto h-52 w-full max-w-[220px]">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
@@ -273,6 +323,7 @@ function TierDistribution({ topProducts, worstProducts }) {
 function ProductTable({ products, totalRevenue }) {
   const [query, setQuery] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [statusExplanationOpen, setStatusExplanationOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
   const [minContribution, setMinContribution] = useState("");
   const [page, setPage] = useState(1);
@@ -309,10 +360,57 @@ function ProductTable({ products, totalRevenue }) {
 
   return (
     <div className="overflow-hidden rounded-xl border border-[#c7c4d8] bg-white shadow-sm lg:col-span-12">
+      {statusExplanationOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0d1c2e]/55 p-4">
+          <div className="w-full max-w-xl rounded-xl bg-white p-6 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <h3 className="text-xl font-bold text-[#0d1c2e]">Performance Status</h3>
+              <button
+                className="rounded-lg p-2 text-[#464555] hover:bg-[#dce9ff]"
+                onClick={() => setStatusExplanationOpen(false)}
+                type="button"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="space-y-3 text-sm leading-6 text-[#464555]">
+              <p>
+                Status pada table ini adalah klasifikasi performa produk berdasarkan ranking revenue
+                dan kontribusi terhadap total revenue pada filter tahun yang sedang aktif.
+              </p>
+              <p>
+                <span className="font-bold text-[#0d1c2e]">Best Seller</span> berarti produk masuk
+                3 besar berdasarkan revenue. Produk ini biasanya menjadi prioritas untuk ketersediaan
+                stok dan campaign utama.
+              </p>
+              <p>
+                <span className="font-bold text-[#0d1c2e]">High Growth</span> berarti kontribusi
+                revenue produk minimal 5% dari total revenue. Label ini menunjukkan produk dengan
+                kontribusi kuat, bukan perhitungan growth month-over-month.
+              </p>
+              <p>
+                <span className="font-bold text-[#0d1c2e]">Stable</span> berarti produk masih
+                berkontribusi, tetapi tidak masuk 3 besar dan kontribusinya di bawah threshold utama.
+                Produk ini bisa dipantau untuk peluang bundling atau promosi tambahan.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="flex flex-col gap-4 border-b border-[#c7c4d8] p-6 lg:flex-row lg:items-center lg:justify-between">
-        <h3 className="text-xl font-semibold text-[#0d1c2e]">
-          Performance Details
-        </h3>
+        <div className="flex items-center gap-3">
+          <h3 className="text-xl font-semibold text-[#0d1c2e]">
+            Performance Details
+          </h3>
+          <button
+            className="flex items-center gap-2 rounded-lg border border-[#c7c4d8] px-3 py-2 text-xs font-semibold text-[#464555] transition hover:border-[#3525cd] hover:text-[#3525cd]"
+            onClick={() => setStatusExplanationOpen(true)}
+            type="button"
+          >
+            <Info size={15} />
+            Status
+          </button>
+        </div>
         <div className="flex flex-col gap-3 sm:flex-row">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#464555]" size={18} />
@@ -541,10 +639,14 @@ function ProductAnalysisModal({ onClose, summary }) {
 }
 
 function ProductAnalytics() {
+  const { selectedYear, setSelectedYear } = useDashboardYear();
   const [analysisOpen, setAnalysisOpen] = useState(false);
-  const { kpi, loading: kpiLoading } = useKPI();
-  const { products: topProducts, loading: topLoading } = useTopProducts(5000);
-  const { products: worstProducts, loading: worstLoading } = useWorstProducts();
+  const years = useDashboardYears();
+  const { kpi, loading: kpiLoading } = useKPI(selectedYear);
+  const { products: topProducts, loading: topLoading } = useTopProducts(5000, selectedYear);
+  const { products: worstProducts, loading: worstLoading } = useWorstProducts(selectedYear);
+  const { revenueData, loading: revenueLoading } = useRevenue(selectedYear);
+  const { revenueData: allRevenueData, loading: allRevenueLoading } = useRevenue("all");
 
   const totalRevenue = Number(kpi?.total_revenue || 0);
   const totalProducts = Number(kpi?.total_products || 0);
@@ -557,10 +659,11 @@ function ProductAnalytics() {
     if (!totalProducts) return 0;
     return Math.max(totalProducts - worstProducts.filter((item) => Number(item.revenue || 0) <= 0).length, 0);
   }, [totalProducts, worstProducts]);
-  const isLoading = kpiLoading || topLoading || worstLoading;
+  const isLoading = kpiLoading || topLoading || worstLoading || revenueLoading || allRevenueLoading;
 
   return (
     <DashboardLayout>
+      <YearFilter value={selectedYear} years={years} onChange={setSelectedYear} />
       {analysisOpen && (
         <ProductAnalysisModal
           onClose={() => setAnalysisOpen(false)}
@@ -636,6 +739,12 @@ function ProductAnalytics() {
           </button>
         </div>
 
+        <RevenueTrendChart
+          allRevenueData={allRevenueData}
+          className="lg:col-span-12"
+          height={300}
+          revenueData={revenueData}
+        />
         <TopProductsBars products={top10Products} totalRevenue={totalRevenue} />
         <ContributionDonut topProducts={top10Products} totalRevenue={totalRevenue} />
         <TierDistribution topProducts={top10Products} worstProducts={worstProducts} />

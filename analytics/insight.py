@@ -15,15 +15,15 @@ from analytics.product import get_top_products
 from analytics.country import get_country_revenue
 
 
-def generate_insight(db):
+def generate_insight(db, year=None):
 
-    monthly = get_monthly_revenue(db)
+    monthly = get_monthly_revenue(db, year=year)
 
     # print(monthly[-3:])
 
-    products = get_top_products(db, limit=1)
+    products = get_top_products(db, limit=1, year=year)
 
-    countries = get_country_revenue(db)
+    countries = get_country_revenue(db, year=year)
 
     revenue_growth = 0
 
