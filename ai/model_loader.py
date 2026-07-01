@@ -37,6 +37,10 @@ def get_model_bundle():
     return tokenizer, model
 
 
+def is_model_loaded():
+    return get_model_bundle.cache_info().currsize > 0
+
+
 def get_runtime_info():
     return {
         "model_path": os.getenv("QWEN_MODEL_PATH", str(DEFAULT_MODEL_PATH)),

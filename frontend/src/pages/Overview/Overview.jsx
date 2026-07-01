@@ -356,7 +356,7 @@ function OrdersTrend({ data }) {
   );
 }
 
-function ReportModal({ onClose, report }) {
+function ReportModal({ enhanceLoading, onClose, onEnhance, report }) {
   if (!report) return null;
 
   return (
@@ -380,6 +380,30 @@ function ReportModal({ onClose, report }) {
               ))}
             </ul>
           </section>
+
+          {report.narrative && (
+            <section className="rounded-lg border border-[#c7c4d8] bg-[#f8f9ff] p-4">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <h3 className="font-bold text-[#3525cd]">AI Contextual Analysis</h3>
+                <span className="rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-[#464555]">
+                  {report.ai_source === "qwen_contextual"
+                    ? "Qwen generated"
+                    : report.ai_source === "contextual_fast"
+                      ? "Fast contextual"
+                      : "Deterministic context"}
+                </span>
+              </div>
+              <p className="leading-6 text-[#464555]">{report.narrative}</p>
+              <button
+                className="mt-4 rounded-lg border border-[#c7c4d8] bg-white px-4 py-2 text-xs font-bold text-[#3525cd] transition hover:border-[#3525cd] disabled:opacity-60"
+                disabled={enhanceLoading}
+                onClick={onEnhance}
+                type="button"
+              >
+                {enhanceLoading ? "Enhancing..." : "Enhance with AI"}
+              </button>
+            </section>
+          )}
 
           <section className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <div className="rounded-lg border border-[#c7c4d8] p-4">
@@ -461,6 +485,7 @@ function Overview() {
   const { selectedYear, setSelectedYear } = useDashboardYear();
   const [report, setReport] = useState(null);
   const [reportLoading, setReportLoading] = useState(false);
+  const [enhanceLoading, setEnhanceLoading] = useState(false);
   const years = useDashboardYears();
   const { kpi, loading: kpiLoading } = useKPI(selectedYear);
   const { revenueData, loading: revenueLoading } = useRevenue(selectedYear);
@@ -484,7 +509,9 @@ function Overview() {
     setReportLoading(true);
 
     try {
-      const response = await api.get("/api/reports/executive");
+      const response = await api.get("/api/reports/executive", {
+        params: selectedYear === "all" ? {} : { year: selectedYear },
+      });
       setReport(response.data);
     } catch (error) {
       console.error(error);
@@ -493,9 +520,31 @@ function Overview() {
     }
   }
 
+  async function enhanceReport() {
+    setEnhanceLoading(true);
+
+    try {
+      const response = await api.get("/api/reports/executive/enhance", {
+        params: selectedYear === "all" ? {} : { year: selectedYear },
+      });
+      setReport((current) => current ? { ...current, ...response.data } : current);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setEnhanceLoading(false);
+    }
+  }
+
   return (
     <DashboardLayout>
-      {report && <ReportModal onClose={() => setReport(null)} report={report} />}
+      {report && (
+        <ReportModal
+          enhanceLoading={enhanceLoading}
+          onClose={() => setReport(null)}
+          onEnhance={enhanceReport}
+          report={report}
+        />
+      )}
       <YearFilter value={selectedYear} years={years} onChange={setSelectedYear} />
       {isLoading && (
         <div className="mb-4 rounded-xl border border-[#c7c4d8] bg-white px-4 py-3 text-sm font-medium text-[#464555]">
